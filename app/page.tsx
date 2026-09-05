@@ -269,7 +269,7 @@ export default function WarRoomLanding() {
             <div style={{ fontSize: 32, fontWeight: 800, color: "#e6edf3" }}>$0</div>
             <div style={{ fontSize: 12, color: "#484f58", marginBottom: 16 }}>forever</div>
             <div style={{ fontSize: 13, color: "#7d8590", lineHeight: 1.8 }}>
-              6-source consensus rankings<br />
+              Weighted multi-source consensus rankings<br />
               Cross-linked strikethrough<br />
               Position tabs and search<br />
               Rule-based pick advisor<br />
