@@ -175,7 +175,7 @@ export default function WarRoomLanding() {
           {[
             {
               icon: "📊",
-              title: "6-source consensus board",
+              title: "Weighted multi-source consensus board",
               desc: "Rankings averaged across 4for4, FantasyPros, ESPN, CBS, and more. Insider sites weighted heavier. Updated daily through draft season."
             },
             {
@@ -284,7 +284,7 @@ export default function WarRoomLanding() {
 
           {/* Pro */}
           <div
-            onClick={() => setPlan("pro")}
+            onClick={() => { alert("clicked!"); window.location.href = "https://buy.stripe.com/test_8x228s7Hg18H5xN8hcgrS00"; }}
             style={{
               background: "#0d1117", borderRadius: 12,
               border: plan === "pro" ? "2px solid #58a6ff" : "1px solid #58a6ff40",

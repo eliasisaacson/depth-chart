@@ -162,14 +162,12 @@ Keep responses under 150 words. No bullet points.`;
     }));
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: apiMessages,
+      const response = await fetch("/api/chat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    system: systemPrompt,
+    messages: apiMessages,
         }),
       });
       const data = await response.json();

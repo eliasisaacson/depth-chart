@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useCallback } from "react";
 
-// ── 6-Source Weighted Consensus ─────────────────────────────────────────────
+// ── Comprehensive Multi-Source Weighted Consensus ─────────────────────────────────────────────
 // Insider (2x): 4for4 VOR, FantasyPros ECR (100+ experts via Bleacher Report)
 // Standard (1x): ESPN Yates, CBS Sports, NFLFantasyEdge ADP, ESPN Mike Clay
 // Updated Sep 4 2026
@@ -631,12 +631,10 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
     }
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+            const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
           system: systemPrompt,
           messages: apiMessages,
         }),

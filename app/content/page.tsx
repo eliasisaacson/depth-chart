@@ -165,19 +165,19 @@ export default function ContentEngine() {
     setSelectedPost(postType.key);
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+            const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: postType.prompt(WEEK_DATA) }],
+          system: "You are a fantasy football content writer for Depth Chart Sports. Write engaging, opinionated Substack newsletter posts.",
+                    messages: [{ role: "user", content: postType.prompt(WEEK_DATA) }],
         }),
       });
       const data = await response.json();
       const text = data.content?.map(b => b.text || "").join("") || "Generation failed — try again.";
       setGenerated(prev => ({ ...prev, [postType.key]: text }));
-    } catch (err) {
+    }     catch (err) {
+      console.error("CONTENT ERROR:", err);
       setGenerated(prev => ({ ...prev, [postType.key]: "Connection error — try again." }));
     }
     setLoading(null);
@@ -268,7 +268,7 @@ export default function ContentEngine() {
             background: "#0d1117", border: "1px solid #161b22",
             fontSize: 11, color: "#484f58", lineHeight: 1.5,
           }}>
-            Data sources this week: 6-source consensus rankings, ESPN injury feed, matchup data from PFF, ownership trends from multi-platform ADP. All posts include Depth Chart CTAs driving to depthchartsports.app.
+            Data sources this week: Weighted multi-source consensus rankings, ESPN injury feed, matchup data from PFF, ownership trends from multi-platform ADP. All posts include Depth Chart CTAs driving to depthchartsports.app.
           </div>
         </div>
       )}
