@@ -1,233 +1,8 @@
 "use client";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { PLAYERS } from "../players";
 
-// ── Comprehensive Multi-Source Weighted Consensus ─────────────────────────────────────────────
-// Insider (2x): 4for4 VOR, FantasyPros ECR (100+ experts via Bleacher Report)
-// Standard (1x): ESPN Yates, CBS Sports, NFLFantasyEdge ADP, ESPN Mike Clay
-// Updated Sep 4 2026
-const PLAYERS = [
-  {id:1,name:"Jahmyr Gibbs",team:"DET",pos:"RB",bye:6,tier:"Elite",adp:1.1},
-  {id:2,name:"Bijan Robinson",team:"ATL",pos:"RB",bye:11,tier:"Elite",adp:1.9},
-  {id:3,name:"Ja'Marr Chase",team:"CIN",pos:"WR",bye:6,tier:"Elite",adp:3.6},
-  {id:4,name:"Jaxon Smith-Njigba",team:"SEA",pos:"WR",bye:11,tier:"Elite",adp:5.0},
-  {id:5,name:"Puka Nacua",team:"LAR",pos:"WR",bye:11,tier:"Elite",adp:5.0},
-  {id:6,name:"Jonathan Taylor",team:"IND",pos:"RB",bye:13,tier:"Tier 1",adp:5.9},
-  {id:7,name:"Amon-Ra St. Brown",team:"DET",pos:"WR",bye:6,tier:"Tier 1",adp:8.2},
-  {id:8,name:"James Cook III",team:"BUF",pos:"RB",bye:7,tier:"Tier 1",adp:9.1},
-  {id:9,name:"De'Von Achane",team:"MIA",pos:"RB",bye:6,tier:"Tier 1",adp:10.0},
-  {id:10,name:"Christian McCaffrey",team:"SF",pos:"RB",bye:8,tier:"Tier 1",adp:10.2},
-  {id:11,name:"Justin Jefferson",team:"MIN",pos:"WR",bye:6,tier:"Tier 1",adp:11.8},
-  {id:12,name:"CeeDee Lamb",team:"DAL",pos:"WR",bye:14,tier:"Tier 1",adp:12.8},
-  {id:13,name:"Saquon Barkley",team:"PHI",pos:"RB",bye:10,tier:"Tier 1",adp:16.1},
-  {id:14,name:"Chase Brown",team:"CIN",pos:"RB",bye:6,tier:"Tier 1",adp:16.1},
-  {id:15,name:"Omarion Hampton",team:"LAC",pos:"RB",bye:7,tier:"Tier 1",adp:17.1},
-  {id:16,name:"Drake London",team:"ATL",pos:"WR",bye:11,tier:"Tier 2",adp:17.4},
-  {id:17,name:"A.J. Brown",team:"NE",pos:"WR",bye:11,tier:"Tier 2",adp:18.5},
-  {id:18,name:"Derrick Henry",team:"BAL",pos:"RB",bye:13,tier:"Tier 2",adp:18.8},
-  {id:19,name:"Ashton Jeanty",team:"LV",pos:"RB",bye:13,tier:"Tier 2",adp:20.6},
-  {id:20,name:"Kenneth Walker",team:"KC",pos:"RB",bye:5,tier:"Tier 2",adp:21.0},
-  {id:21,name:"Nico Collins",team:"HOU",pos:"WR",bye:8,tier:"Tier 2",adp:21.9},
-  {id:22,name:"George Pickens",team:"DAL",pos:"WR",bye:14,tier:"Tier 2",adp:21.9},
-  {id:23,name:"Brock Bowers",team:"LV",pos:"TE",bye:13,tier:"Tier 2",adp:22.2},
-  {id:24,name:"Chris Olave",team:"NO",pos:"WR",bye:8,tier:"Tier 2",adp:22.9},
-  {id:25,name:"Trey McBride",team:"ARI",pos:"TE",bye:14,tier:"Tier 2",adp:24.8},
-  {id:26,name:"Josh Allen",team:"BUF",pos:"QB",bye:7,tier:"Tier 2",adp:28.0},
-  {id:27,name:"Rashee Rice",team:"KC",pos:"WR",bye:5,tier:"Tier 2",adp:28.6},
-  {id:28,name:"DeVonta Smith",team:"PHI",pos:"WR",bye:10,tier:"Tier 2",adp:28.9},
-  {id:29,name:"Jeremiyah Love",team:"ARI",pos:"RB",bye:14,tier:"Tier 2",adp:29.8},
-  {id:30,name:"Malik Nabers",team:"NYG",pos:"WR",bye:8,tier:"Tier 2",adp:31.0},
-  {id:31,name:"Javonte Williams",team:"DAL",pos:"RB",bye:14,tier:"Tier 3",adp:31.4},
-  {id:32,name:"Garrett Wilson",team:"NYJ",pos:"WR",bye:13,tier:"Tier 3",adp:31.5},
-  {id:33,name:"Kyren Williams",team:"LAR",pos:"RB",bye:11,tier:"Tier 3",adp:31.6},
-  {id:34,name:"Zay Flowers",team:"BAL",pos:"WR",bye:13,tier:"Tier 3",adp:32.8},
-  {id:35,name:"Breece Hall",team:"NYJ",pos:"RB",bye:13,tier:"Tier 3",adp:34.6},
-  {id:36,name:"Tetairoa McMillan",team:"CAR",pos:"WR",bye:5,tier:"Tier 3",adp:37.8},
-  {id:37,name:"Travis Etienne Jr.",team:"NO",pos:"RB",bye:8,tier:"Tier 3",adp:38.4},
-  {id:38,name:"Jaylen Waddle",team:"DEN",pos:"WR",bye:10,tier:"Tier 3",adp:39.2},
-  {id:39,name:"Emeka Egbuka",team:"TB",pos:"WR",bye:10,tier:"Tier 3",adp:39.2},
-  {id:40,name:"Colston Loveland",team:"CHI",pos:"TE",bye:10,tier:"Tier 3",adp:40.8},
-  {id:41,name:"Cam Skattebo",team:"NYG",pos:"RB",bye:8,tier:"Tier 3",adp:41.9},
-  {id:42,name:"D'Andre Swift",team:"CHI",pos:"RB",bye:10,tier:"Tier 3",adp:45.0},
-  {id:43,name:"Quinshon Judkins",team:"CLE",pos:"RB",bye:11,tier:"Tier 3",adp:47.4},
-  {id:44,name:"Tee Higgins",team:"CIN",pos:"WR",bye:6,tier:"Tier 3",adp:48.5},
-  {id:45,name:"Bucky Irving",team:"TB",pos:"RB",bye:10,tier:"Tier 3",adp:49.4},
-  {id:46,name:"Ladd McConkey",team:"LAC",pos:"WR",bye:7,tier:"Tier 3",adp:51.0},
-  {id:47,name:"Lamar Jackson",team:"BAL",pos:"QB",bye:13,tier:"Tier 3",adp:52.0},
-  {id:48,name:"Bhayshul Tuten",team:"JAX",pos:"RB",bye:7,tier:"Tier 3",adp:56.4},
-  {id:49,name:"Drake Maye",team:"NE",pos:"QB",bye:11,tier:"Tier 3",adp:58.4},
-  {id:50,name:"David Montgomery",team:"HOU",pos:"RB",bye:8,tier:"Tier 3",adp:60.8},
-  {id:51,name:"Tyler Warren",team:"IND",pos:"TE",bye:13,tier:"Tier 4",adp:65.9},
-  {id:52,name:"Davante Adams",team:"LAR",pos:"WR",bye:11,tier:"Tier 4",adp:67.2},
-  {id:53,name:"Rhamondre Stevenson",team:"NE",pos:"RB",bye:11,tier:"Tier 4",adp:68.4},
-  {id:54,name:"Jadarian Price",team:"SEA",pos:"RB",bye:11,tier:"Tier 4",adp:69.1},
-  {id:55,name:"Luther Burden III",team:"CHI",pos:"WR",bye:10,tier:"Tier 4",adp:69.2},
-  {id:56,name:"Terry McLaurin",team:"WAS",pos:"WR",bye:7,tier:"Tier 4",adp:69.4},
-  {id:57,name:"DJ Moore",team:"BUF",pos:"WR",bye:7,tier:"Tier 4",adp:70.1},
-  {id:58,name:"Jameson Williams",team:"DET",pos:"WR",bye:6,tier:"Tier 4",adp:71.9},
-  {id:59,name:"Jayden Daniels",team:"WAS",pos:"QB",bye:7,tier:"Tier 4",adp:71.9},
-  {id:60,name:"Christian Watson",team:"GB",pos:"WR",bye:11,tier:"Tier 4",adp:77.4},
-  {id:61,name:"Jalen Hurts",team:"PHI",pos:"QB",bye:10,tier:"Tier 4",adp:77.9},
-  {id:62,name:"Joe Burrow",team:"CIN",pos:"QB",bye:6,tier:"Tier 4",adp:78.6},
-  {id:63,name:"Rome Odunze",team:"CHI",pos:"WR",bye:10,tier:"Tier 4",adp:78.6},
-  {id:64,name:"Parker Washington",team:"JAX",pos:"WR",bye:7,tier:"Tier 4",adp:78.8},
-  {id:65,name:"Mike Evans",team:"SF",pos:"WR",bye:8,tier:"Tier 4",adp:79.4},
-  {id:66,name:"Jaylen Warren",team:"PIT",pos:"RB",bye:9,tier:"Tier 4",adp:82.8},
-  {id:67,name:"TreVeyon Henderson",team:"NE",pos:"RB",bye:11,tier:"Tier 4",adp:84.2},
-  {id:68,name:"Tony Pollard",team:"TEN",pos:"RB",bye:9,tier:"Tier 4",adp:84.6},
-  {id:69,name:"DK Metcalf",team:"PIT",pos:"WR",bye:9,tier:"Tier 4",adp:87.2},
-  {id:70,name:"Brian Thomas Jr.",team:"JAX",pos:"WR",bye:7,tier:"Tier 4",adp:88.0},
-  {id:71,name:"Rico Dowdle",team:"PIT",pos:"RB",bye:9,tier:"Tier 4",adp:88.0},
-  {id:72,name:"Chris Godwin Jr.",team:"TB",pos:"WR",bye:10,tier:"Tier 4",adp:88.2},
-  {id:73,name:"Tucker Kraft",team:"GB",pos:"TE",bye:11,tier:"Tier 4",adp:90.0},
-  {id:74,name:"Jonathon Brooks",team:"CAR",pos:"RB",bye:5,tier:"Tier 4",adp:94.1},
-  {id:75,name:"Marvin Harrison Jr.",team:"ARI",pos:"WR",bye:14,tier:"Tier 4",adp:96.1},
-  {id:76,name:"Sam LaPorta",team:"DET",pos:"TE",bye:6,tier:"Tier 5",adp:96.1},
-  {id:77,name:"Carnell Tate",team:"TEN",pos:"WR",bye:9,tier:"Tier 5",adp:99.1},
-  {id:78,name:"Dak Prescott",team:"DAL",pos:"QB",bye:14,tier:"Tier 5",adp:101.0},
-  {id:79,name:"Caleb Williams",team:"CHI",pos:"QB",bye:10,tier:"Tier 5",adp:101.6},
-  {id:80,name:"Kyle Pitts Sr.",team:"ATL",pos:"TE",bye:11,tier:"Tier 5",adp:102.1},
-  {id:81,name:"Courtland Sutton",team:"DEN",pos:"WR",bye:10,tier:"Tier 5",adp:102.4},
-  {id:82,name:"Alec Pierce",team:"IND",pos:"WR",bye:13,tier:"Tier 5",adp:105.9},
-  {id:83,name:"Trevor Lawrence",team:"JAX",pos:"QB",bye:7,tier:"Tier 5",adp:107.8},
-  {id:84,name:"Michael Wilson",team:"ARI",pos:"WR",bye:14,tier:"Tier 5",adp:107.8},
-  {id:85,name:"J.K. Dobbins",team:"DEN",pos:"RB",bye:10,tier:"Tier 5",adp:109.6},
-  {id:86,name:"Kenny Gainwell",team:"TB",pos:"RB",bye:10,tier:"Tier 5",adp:110.0},
-  {id:87,name:"RJ Harvey",team:"DEN",pos:"RB",bye:10,tier:"Tier 5",adp:110.2},
-  {id:88,name:"Harold Fannin Jr.",team:"CLE",pos:"TE",bye:11,tier:"Tier 5",adp:110.4},
-  {id:89,name:"Stefon Diggs",team:"WAS",pos:"WR",bye:7,tier:"Tier 5",adp:111.5},
-  {id:90,name:"George Kittle",team:"SF",pos:"TE",bye:8,tier:"Tier 5",adp:111.5},
-  {id:91,name:"Michael Pittman Jr.",team:"PIT",pos:"WR",bye:9,tier:"Tier 5",adp:111.9},
-  {id:92,name:"Justin Herbert",team:"LAC",pos:"QB",bye:7,tier:"Tier 5",adp:112.6},
-  {id:93,name:"Wan'Dale Robinson",team:"TEN",pos:"WR",bye:9,tier:"Tier 5",adp:114.0},
-  {id:94,name:"Chuba Hubbard",team:"CAR",pos:"RB",bye:5,tier:"Tier 5",adp:114.0},
-  {id:95,name:"Matthew Stafford",team:"LAR",pos:"QB",bye:11,tier:"Tier 5",adp:114.0},
-  {id:96,name:"Jakobi Meyers",team:"JAX",pos:"WR",bye:7,tier:"Tier 5",adp:115.9},
-  {id:97,name:"Jordan Mason",team:"MIN",pos:"RB",bye:6,tier:"Tier 5",adp:116.5},
-  {id:98,name:"Travis Kelce",team:"KC",pos:"TE",bye:5,tier:"Tier 5",adp:118.8},
-  {id:99,name:"Quentin Johnston",team:"LAC",pos:"WR",bye:7,tier:"Tier 5",adp:119.5},
-  {id:100,name:"Josh Downs",team:"IND",pos:"WR",bye:13,tier:"Tier 5",adp:120.5},
-  {id:101,name:"Jayden Reed",team:"GB",pos:"WR",bye:11,tier:"Tier 6",adp:121.2},
-  {id:102,name:"Makai Lemon",team:"PHI",pos:"WR",bye:10,tier:"Tier 6",adp:121.8},
-  {id:103,name:"MarShawn Lloyd",team:"GB",pos:"RB",bye:11,tier:"Tier 6",adp:121.8},
-  {id:104,name:"Bo Nix",team:"DEN",pos:"QB",bye:10,tier:"Tier 6",adp:122.2},
-  {id:105,name:"Josh Jacobs",team:"GB",pos:"RB",bye:11,tier:"Tier 6",adp:122.5},
-  {id:106,name:"Jacory Croskey-Merritt",team:"WAS",pos:"RB",bye:7,tier:"Tier 6",adp:123.9},
-  {id:107,name:"Isaiah Likely",team:"NYG",pos:"TE",bye:8,tier:"Tier 6",adp:124.0},
-  {id:108,name:"Jordan Addison",team:"MIN",pos:"WR",bye:6,tier:"Tier 6",adp:124.1},
-  {id:109,name:"Brock Purdy",team:"SF",pos:"QB",bye:8,tier:"Tier 6",adp:124.4},
-  {id:110,name:"Blake Corum",team:"LAR",pos:"RB",bye:11,tier:"Tier 6",adp:125.8},
-  // Extended offensive players (131-164)
-  {id:111,name:"Rachaad White",team:"WAS",pos:"RB",bye:7,tier:"Tier 6",adp:126.0},
-  {id:112,name:"Kyle Monangai",team:"CHI",pos:"RB",bye:10,tier:"Tier 6",adp:127.5},
-  {id:113,name:"Jared Goff",team:"DET",pos:"QB",bye:6,tier:"Tier 6",adp:129.0},
-  {id:114,name:"Daniel Jones",team:"IND",pos:"QB",bye:13,tier:"Tier 6",adp:130.5},
-  {id:115,name:"C.J. Stroud",team:"HOU",pos:"QB",bye:8,tier:"Tier 6",adp:132.0},
-  {id:116,name:"Malik Willis",team:"MIA",pos:"QB",bye:6,tier:"Tier 6",adp:133.5},
-  {id:117,name:"Cam Ward",team:"TEN",pos:"QB",bye:9,tier:"Tier 6",adp:135.0},
-  {id:118,name:"Tyler Shough",team:"NO",pos:"QB",bye:8,tier:"Tier 6",adp:136.5},
-  {id:119,name:"Xavier Worthy",team:"KC",pos:"WR",bye:5,tier:"Tier 6",adp:138.0},
-  {id:120,name:"Tyjae Spears",team:"TEN",pos:"RB",bye:9,tier:"Tier 6",adp:139.5},
-  {id:121,name:"Juwan Johnson",team:"NO",pos:"TE",bye:8,tier:"Tier 6",adp:141.0},
-  {id:122,name:"Brian Robinson Jr.",team:"ATL",pos:"RB",bye:11,tier:"Tier 6",adp:142.5},
-  {id:123,name:"Mike Washington Jr.",team:"LV",pos:"RB",bye:13,tier:"Tier 6",adp:144.0},
-  {id:124,name:"Matthew Golden",team:"GB",pos:"WR",bye:11,tier:"Tier 6",adp:145.5},
-  {id:125,name:"De'Zhaun Stribling",team:"SF",pos:"WR",bye:8,tier:"Tier 7",adp:147.0},
-  {id:126,name:"AJ Barner",team:"SEA",pos:"TE",bye:11,tier:"Tier 7",adp:148.5},
-  {id:127,name:"Hunter Henry",team:"NE",pos:"TE",bye:11,tier:"Tier 7",adp:150.0},
-  {id:128,name:"Dontayvion Wicks",team:"GB",pos:"WR",bye:11,tier:"Tier 7",adp:151.5},
-  {id:129,name:"Jalen Tolbert",team:"DAL",pos:"WR",bye:14,tier:"Tier 7",adp:153.0},
-  {id:130,name:"Cedric Tillman",team:"CLE",pos:"WR",bye:11,tier:"Tier 7",adp:154.5},
-  {id:131,name:"Elijah Mitchell",team:"LAC",pos:"RB",bye:7,tier:"Tier 7",adp:156.0},
-  {id:132,name:"Tyler Allgeier",team:"ARI",pos:"RB",bye:14,tier:"Tier 7",adp:157.5},
-  {id:133,name:"Ray Davis",team:"BUF",pos:"RB",bye:7,tier:"Tier 7",adp:159.0},
-  {id:134,name:"Terrace Ferguson",team:"WAS",pos:"TE",bye:7,tier:"Tier 7",adp:160.5},
-  {id:135,name:"Braelon Allen",team:"NYJ",pos:"RB",bye:13,tier:"Tier 7",adp:162.0},
-  {id:136,name:"Adam Thielen",team:"CAR",pos:"WR",bye:5,tier:"Tier 7",adp:163.5},
-  {id:137,name:"Chigoziem Okonkwo",team:"TEN",pos:"TE",bye:9,tier:"Tier 7",adp:165.0},
-  {id:138,name:"Darnell Mooney",team:"NYG",pos:"WR",bye:8,tier:"Tier 7",adp:166.5},
-  {id:139,name:"Jerry Jeudy",team:"CLE",pos:"WR",bye:11,tier:"Tier 7",adp:168.0},
-  {id:140,name:"Chris Rodriguez Jr.",team:"JAX",pos:"RB",bye:7,tier:"Tier 7",adp:169.5},
-  {id:141,name:"Tyrone Tracy Jr.",team:"NYG",pos:"RB",bye:8,tier:"Tier 7",adp:171.0},
-  {id:142,name:"Demarcus Robinson",team:"LAR",pos:"WR",bye:11,tier:"Tier 7",adp:172.5},
-  {id:143,name:"Keenan Allen",team:"CHI",pos:"WR",bye:10,tier:"Tier 7",adp:174.0},
-  {id:144,name:"Dalton Kincaid",team:"BUF",pos:"TE",bye:7,tier:"Tier 7",adp:175.5},
-  {id:145,name:"Gus Edwards",team:"LAC",pos:"RB",bye:7,tier:"Tier 7",adp:177.0},
-  {id:146,name:"Justice Hill",team:"BAL",pos:"RB",bye:13,tier:"Tier 7",adp:178.5},
-  {id:147,name:"Isiah Pacheco",team:"KC",pos:"RB",bye:5,tier:"Tier 7",adp:180.0},
-  {id:148,name:"Bryce Young",team:"CAR",pos:"QB",bye:5,tier:"Tier 7",adp:181.5},
-  {id:149,name:"Rashod Bateman",team:"BAL",pos:"WR",bye:13,tier:"Tier 7",adp:183.0},
-  {id:150,name:"Raheem Mostert",team:"MIA",pos:"RB",bye:6,tier:"Tier 7",adp:184.5},
-  {id:151,name:"Zack Moss",team:"CIN",pos:"RB",bye:6,tier:"Tier 7",adp:186.0},
-  {id:152,name:"Jerome Ford",team:"CLE",pos:"RB",bye:11,tier:"Tier 7",adp:187.5},
-  {id:153,name:"Kendre Miller",team:"NO",pos:"RB",bye:8,tier:"Tier 7",adp:189.0},
-  {id:154,name:"Jacoby Brissett",team:"ARI",pos:"QB",bye:14,tier:"Tier 7",adp:190.5},
-  {id:155,name:"Geno Smith",team:"NYJ",pos:"QB",bye:13,tier:"Tier 7",adp:192.0},
-  {id:156,name:"Craig Reynolds",team:"DET",pos:"RB",bye:6,tier:"Tier 7",adp:193.5},
-  {id:157,name:"Jake Tonges",team:"SF",pos:"TE",bye:8,tier:"Tier 7",adp:195.0},
-  // Kickers (20 deep)
-  {id:158,name:"Brandon Aubrey",team:"DAL",pos:"K",bye:14,tier:"K1",adp:200.0},
-  {id:159,name:"Cameron Dicker",team:"LAC",pos:"K",bye:7,tier:"K2",adp:202.0},
-  {id:160,name:"Eddy Pineiro",team:"SF",pos:"K",bye:8,tier:"K3",adp:204.0},
-  {id:161,name:"Harrison Mevis",team:"LAR",pos:"K",bye:11,tier:"K4",adp:206.0},
-  {id:162,name:"Ka'imi Fairbairn",team:"HOU",pos:"K",bye:8,tier:"K5",adp:208.0},
-  {id:163,name:"Cam Little",team:"JAX",pos:"K",bye:7,tier:"K6",adp:210.0},
-  {id:164,name:"Jason Myers",team:"SEA",pos:"K",bye:11,tier:"K7",adp:212.0},
-  {id:165,name:"Evan McPherson",team:"CIN",pos:"K",bye:6,tier:"K8",adp:214.0},
-  {id:166,name:"Harrison Butker",team:"KC",pos:"K",bye:5,tier:"K9",adp:216.0},
-  {id:167,name:"Jake Bates",team:"DET",pos:"K",bye:6,tier:"K10",adp:218.0},
-  {id:168,name:"Andy Borregales",team:"NE",pos:"K",bye:11,tier:"K11",adp:220.0},
-  {id:169,name:"Tyler Loop",team:"BAL",pos:"K",bye:13,tier:"K12",adp:222.0},
-  {id:170,name:"Chris Boswell",team:"PIT",pos:"K",bye:9,tier:"K13",adp:224.0},
-  {id:171,name:"Cairo Santos",team:"CHI",pos:"K",bye:10,tier:"K14",adp:226.0},
-  {id:172,name:"Chase McLaughlin",team:"TB",pos:"K",bye:10,tier:"K15",adp:228.0},
-  {id:173,name:"Wil Lutz",team:"DEN",pos:"K",bye:10,tier:"K16",adp:230.0},
-  {id:174,name:"Tyler Bass",team:"BUF",pos:"K",bye:7,tier:"K17",adp:232.0},
-  {id:175,name:"Charlie Smyth",team:"NO",pos:"K",bye:8,tier:"K18",adp:234.0},
-  {id:176,name:"Trey Smack",team:"GB",pos:"K",bye:11,tier:"K19",adp:236.0},
-  {id:177,name:"Will Reichard",team:"MIN",pos:"K",bye:6,tier:"K20",adp:238.0},
-  // DEF (20 deep)
-  {id:178,name:"Seattle DEF",team:"SEA",pos:"DEF",bye:11,tier:"DEF1",adp:100.0},
-  {id:179,name:"Houston DEF",team:"HOU",pos:"DEF",bye:8,tier:"DEF2",adp:105.0},
-  {id:180,name:"Denver DEF",team:"DEN",pos:"DEF",bye:10,tier:"DEF3",adp:108.0},
-  {id:181,name:"Los Angeles Rams DEF",team:"LAR",pos:"DEF",bye:11,tier:"DEF4",adp:112.0},
-  {id:182,name:"Pittsburgh DEF",team:"PIT",pos:"DEF",bye:9,tier:"DEF5",adp:115.0},
-  {id:183,name:"Los Angeles Chargers DEF",team:"LAC",pos:"DEF",bye:7,tier:"DEF6",adp:118.0},
-  {id:184,name:"Baltimore DEF",team:"BAL",pos:"DEF",bye:13,tier:"DEF7",adp:120.0},
-  {id:185,name:"Buffalo DEF",team:"BUF",pos:"DEF",bye:7,tier:"DEF8",adp:123.0},
-  {id:186,name:"Jacksonville DEF",team:"JAX",pos:"DEF",bye:7,tier:"DEF9",adp:126.0},
-  {id:187,name:"Chicago DEF",team:"CHI",pos:"DEF",bye:10,tier:"DEF10",adp:128.0},
-  {id:188,name:"Cleveland DEF",team:"CLE",pos:"DEF",bye:11,tier:"DEF11",adp:130.0},
-  {id:189,name:"San Francisco DEF",team:"SF",pos:"DEF",bye:8,tier:"DEF12",adp:133.0},
-  {id:190,name:"Philadelphia DEF",team:"PHI",pos:"DEF",bye:10,tier:"DEF13",adp:136.0},
-  {id:191,name:"Dallas DEF",team:"DAL",pos:"DEF",bye:14,tier:"DEF14",adp:139.0},
-  {id:192,name:"Minnesota DEF",team:"MIN",pos:"DEF",bye:6,tier:"DEF15",adp:142.0},
-  {id:193,name:"New England DEF",team:"NE",pos:"DEF",bye:11,tier:"DEF16",adp:145.0},
-  {id:194,name:"Detroit DEF",team:"DET",pos:"DEF",bye:6,tier:"DEF17",adp:148.0},
-  {id:195,name:"Green Bay DEF",team:"GB",pos:"DEF",bye:11,tier:"DEF18",adp:151.0},
-  {id:196,name:"Kansas City DEF",team:"KC",pos:"DEF",bye:5,tier:"DEF19",adp:154.0},
-  {id:197,name:"Tampa Bay DEF",team:"TB",pos:"DEF",bye:10,tier:"DEF20",adp:157.0},
-  // Deep offensive sleepers
-  {id:198,name:"Marvin Mims Jr.",team:"DEN",pos:"WR",bye:10,tier:"Tier 7",adp:196.0},
-  {id:199,name:"Tank Bigsby",team:"JAX",pos:"RB",bye:7,tier:"Tier 7",adp:197.0},
-  {id:200,name:"Ty Johnson",team:"BUF",pos:"RB",bye:7,tier:"Tier 7",adp:198.0},
-  {id:201,name:"Tre Tucker",team:"LV",pos:"WR",bye:13,tier:"Tier 7",adp:199.0},
-  {id:202,name:"Jermaine Burton",team:"CIN",pos:"WR",bye:6,tier:"Tier 7",adp:200.0},
-  {id:203,name:"Kayshon Boutte",team:"NE",pos:"WR",bye:11,tier:"Tier 7",adp:201.0},
-  {id:204,name:"Ty Davis-Price",team:"SF",pos:"RB",bye:8,tier:"Tier 7",adp:202.0},
-  {id:205,name:"Cade Otton",team:"TB",pos:"TE",bye:10,tier:"Tier 7",adp:203.0},
-  {id:206,name:"Carson Beck",team:"ARI",pos:"QB",bye:14,tier:"Tier 7",adp:204.0},
-  {id:207,name:"Fernando Mendoza",team:"LV",pos:"QB",bye:13,tier:"Tier 7",adp:205.0},
-  {id:208,name:"Tylan Wallace",team:"BAL",pos:"WR",bye:13,tier:"Tier 7",adp:206.0},
-  {id:209,name:"Devin Singletary",team:"NYG",pos:"RB",bye:8,tier:"Tier 7",adp:207.0},
-  {id:210,name:"Noah Gray",team:"KC",pos:"TE",bye:5,tier:"Tier 7",adp:208.0},
-  {id:211,name:"Rashid Shaheed",team:"NO",pos:"WR",bye:8,tier:"Tier 7",adp:209.0},
-  {id:212,name:"Ty Chandler",team:"MIN",pos:"RB",bye:6,tier:"Tier 7",adp:210.0},
-  {id:213,name:"Adonai Mitchell",team:"IND",pos:"WR",bye:13,tier:"Tier 7",adp:211.0},
-  {id:214,name:"Nick Westbrook-Ikhine",team:"TEN",pos:"WR",bye:9,tier:"Tier 7",adp:212.0},
-  {id:215,name:"Keaton Mitchell",team:"BAL",pos:"RB",bye:13,tier:"Tier 7",adp:213.0},
-  {id:216,name:"Ty Simpson",team:"LAR",pos:"QB",bye:11,tier:"Tier 7",adp:214.0},
-  {id:217,name:"Pat Freiermuth",team:"PIT",pos:"TE",bye:9,tier:"Tier 7",adp:215.0},
-];
+// Player data imported from ../players
 
 // Position colors
 const POS_COLORS = {
@@ -347,15 +122,32 @@ const ROSTER_TARGETS = {
 };
 
 // ── Picks Until Next Turn Calculator ────────────────────────────────────
-function getPicksUntilNext(round, struckCount) {
-  const slot = 3;
-  const isOdd = round % 2 === 1;
-  const myPick = isOdd ? (round - 1) * 12 + slot : round * 12 - slot + 1;
-  const nextRound = round + 1;
-  if (nextRound > 18) return null;
-  const nextIsOdd = nextRound % 2 === 1;
-  const nextPick = nextIsOdd ? (nextRound - 1) * 12 + slot : nextRound * 12 - slot + 1;
-  return nextPick - myPick - 1;
+function getPicksUntilNext(struckCount, numTeams, draftPos, draftType) {
+  if (draftType === "Auction") return null; // No pick order in auction
+
+  const totalPicks = numTeams * 18; // 18 rounds max
+  const currentOverallPick = struckCount + 1; // Next pick to be made
+
+  // Build list of all user's picks
+  const myPicks = [];
+  for (let r = 1; r <= 18; r++) {
+    let pick;
+    if (draftType === "Linear") {
+      pick = (r - 1) * numTeams + draftPos;
+    } else {
+      // Snake: odd rounds go forward, even rounds go backward
+      const isOdd = r % 2 === 1;
+      pick = isOdd ? (r - 1) * numTeams + draftPos : r * numTeams - draftPos + 1;
+    }
+    myPicks.push(pick);
+  }
+
+  // Find the next user pick that hasn't happened yet
+  const nextPick = myPicks.find(p => p >= currentOverallPick);
+  if (!nextPick) return null; // All picks done
+
+  const picksAway = nextPick - currentOverallPick;
+  return { picksAway, nextPick, isMyPick: picksAway === 0 };
 }
 
 // ── VOR / Positional Drop-off ───────────────────────────────────────────
@@ -487,40 +279,67 @@ function PosBadge({ pos }) {
   );
 }
 
-function PlayerRow({ player, rank, struck, onToggle, compact, stealLevel }) {
+function PlayerRow({ player, rank, struck, onToggle, compact, stealLevel, onDraft, onUndraft, isDrafted }) {
   const inj = getInjuryBadge(player.name);
   const hc = HANDCUFFS[player.name];
   return (
     <div
-      onClick={() => onToggle(player.id)}
       style={{
         display: "flex", alignItems: "center", gap: 8, padding: compact ? "5px 10px" : "7px 12px",
-        cursor: "pointer", borderBottom: "1px solid var(--border)",
+        borderBottom: "1px solid var(--border)",
         background: struck ? "var(--struck-bg)" : stealLevel ? `${stealLevel.color}08` : "transparent",
         opacity: struck ? 0.45 : 1,
-        textDecoration: struck ? "line-through" : "none",
         transition: "all 0.15s ease",
       }}
     >
-      <span style={{ width: 32, fontSize: 12, color: "var(--dim)", textAlign: "right", flexShrink: 0, textDecoration: "none" }}>
+      <span
+        onClick={() => onToggle(player.id)}
+        style={{ width: 32, fontSize: 12, color: "var(--dim)", textAlign: "right", flexShrink: 0, cursor: "pointer", textDecoration: struck && !isDrafted ? "line-through" : "none" }}
+        title="Click to cross off"
+      >
         {rank}
       </span>
       <PosBadge pos={player.pos} />
-      <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "var(--fg)" }}>
+      <span
+        onClick={() => onToggle(player.id)}
+        style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "var(--fg)", cursor: "pointer", textDecoration: struck ? "line-through" : "none" }}
+      >
         {player.name}
         {inj && (
           <span title={inj.note} style={{
             display: "inline-block", marginLeft: 4, padding: "0 4px", borderRadius: 3,
             fontSize: 9, fontWeight: 800, background: inj.color.bg, color: inj.color.text,
-            verticalAlign: "middle", lineHeight: "14px", cursor: "help",
+            verticalAlign: "middle", lineHeight: "14px", cursor: "help", textDecoration: "none",
           }}>{inj.label}</span>
         )}
         {stealLevel && !struck && (
           <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 900, color: stealLevel.color, letterSpacing: -1 }}>{stealLevel.label}</span>
         )}
+        {isDrafted && (
+          <span style={{ marginLeft: 4, fontSize: 9, fontWeight: 800, background: "var(--green)", color: "#000", padding: "0 4px", borderRadius: 3, verticalAlign: "middle", lineHeight: "14px", textDecoration: "none", display: "inline-block" }}>MY PICK</span>
+        )}
       </span>
       <span style={{ fontSize: 11, color: "var(--dim)", width: 36, textAlign: "center" }}>{player.team}</span>
       <span style={{ fontSize: 11, color: "var(--dim)", width: 30, textAlign: "center" }}>{player.bye}</span>
+      {!struck ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDraft(player); }}
+          style={{
+            padding: "3px 8px", borderRadius: 4, border: "none", fontSize: 10, fontWeight: 700,
+            background: "var(--green)", color: "#000", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+          }}
+        >Draft</button>
+      ) : isDrafted ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onUndraft(player.id); }}
+          style={{
+            padding: "3px 8px", borderRadius: 4, border: "none", fontSize: 10, fontWeight: 700,
+            background: "var(--red)", color: "#fff", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+          }}
+        >Undo</button>
+      ) : (
+        <span style={{ width: 42, flexShrink: 0 }} />
+      )}
     </div>
   );
 }
@@ -530,13 +349,78 @@ export default function DraftBoard() {
   const [struckIds, setStruckIds] = useState(new Set());
   const [myTeam, setMyTeam] = useState([]);
   const [activeTab, setActiveTab] = useState("Overall");
-  const [round, setRound] = useState(1);
   const [search, setSearch] = useState("");
   const [hideStruck, setHideStruck] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [numTeams, setNumTeams] = useState(12);
+  const [draftPos, setDraftPos] = useState(3);
+  const [draftType, setDraftType] = useState("Snake");
+  const [scoringRules, setScoringRules] = useState("");
+  const [showSettings, setShowSettings] = useState(true);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [csvStatus, setCsvStatus] = useState("");
+  const [customRankings, setCustomRankings] = useState(null);
   const chatEndRef = { current: null };
+
+  // Load saved state from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedTeam = localStorage.getItem("depthchart-myteam");
+      if (savedTeam) setMyTeam(JSON.parse(savedTeam));
+      const savedStruck = localStorage.getItem("depthchart-struck");
+      if (savedStruck) setStruckIds(new Set(JSON.parse(savedStruck)));
+    } catch {}
+  }, []);
+
+  const round = Math.min(18, Math.floor(struckIds.size / numTeams) + 1);
+
+  // CSV Upload Handler — auto-detects positions from PLAYERS database
+  const handleCsvUpload = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target?.result;
+        const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+        // Build a lookup from the PLAYERS array
+        const lookup = {};
+        PLAYERS.forEach(p => { lookup[p.name.toLowerCase()] = p; });
+        const ranked = [];
+        let matched = 0;
+        for (const line of lines) {
+          // Try to extract player name — handle "rank, name, team" or just "name" or "name, team"
+          const parts = line.split(",").map(s => s.trim().replace(/^["']|["']$/g, ""));
+          let found = null;
+          // Try each part as a potential player name
+          for (const part of parts) {
+            const key = part.toLowerCase();
+            if (lookup[key]) { found = lookup[key]; break; }
+            // Fuzzy: check if any player name contains this part or vice versa
+            const match = PLAYERS.find(p => p.name.toLowerCase().includes(key) || key.includes(p.name.toLowerCase()));
+            if (match && key.length > 4) { found = match; break; }
+          }
+          if (found && !ranked.some(r => r.id === found.id)) {
+            ranked.push({ ...found, customRank: ranked.length + 1 });
+            matched++;
+          }
+        }
+        if (matched > 0) {
+          setCustomRankings(ranked);
+          setCsvStatus(`✓ Imported ${matched} players from ${lines.length} rows`);
+        } else {
+          setCsvStatus("Error: No matching players found. Check your CSV format.");
+        }
+      } catch (err) {
+        setCsvStatus("Error: Could not parse CSV file.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset file input so same file can be re-uploaded
+    e.target.value = "";
+  }, []);
 
   const toggle = useCallback((id) => {
     setStruckIds(prev => {
@@ -559,6 +443,19 @@ export default function DraftBoard() {
     setStruckIds(prev => { const next = new Set(prev); next.delete(id); return next; });
   }, []);
 
+  // Sync myTeam and struckIds to localStorage
+  useEffect(() => {
+    if (myTeam.length > 0) {
+      localStorage.setItem("depthchart-myteam", JSON.stringify(myTeam));
+    }
+  }, [myTeam]);
+
+  useEffect(() => {
+    if (struckIds.size > 0) {
+      localStorage.setItem("depthchart-struck", JSON.stringify([...struckIds]));
+    }
+  }, [struckIds]);
+
   const snakePick = useMemo(() => {
     const slot = 3;
     const picks = [];
@@ -569,7 +466,15 @@ export default function DraftBoard() {
     return picks;
   }, []);
 
-  const sorted = useMemo(() => [...PLAYERS].sort((a, b) => a.adp - b.adp), []);
+  const sorted = useMemo(() => {
+    if (customRankings && customRankings.length > 0) {
+      // Custom-ranked players first in their order, then remaining players by ADP
+      const rankedIds = new Set(customRankings.map(p => p.id));
+      const remaining = PLAYERS.filter(p => !rankedIds.has(p.id)).sort((a, b) => a.adp - b.adp);
+      return [...customRankings, ...remaining];
+    }
+    return [...PLAYERS].sort((a, b) => a.adp - b.adp);
+  }, [customRankings]);
   const available = useMemo(() => sorted.filter(p => !struckIds.has(p.id)), [sorted, struckIds]);
 
   const filteredPlayers = useMemo(() => {
@@ -590,40 +495,69 @@ export default function DraftBoard() {
 
   const currentPick = snakePick.find(p => p.round === round);
 
+  const MESSAGE_CAP = 20;
+  const userMsgCount = chatMessages.filter(m => m.role === "user").length;
+  const isAtCap = userMsgCount >= MESSAGE_CAP;
+
   const sendChat = useCallback(async (userMsg) => {
     if (!userMsg.trim()) return;
+
+    // Enforce message cap
+    const currentUserMsgs = chatMessages.filter(m => m.role === "user").length;
+    if (currentUserMsgs >= MESSAGE_CAP) return;
+
     const newMsgs = [...chatMessages, { role: "user", text: userMsg }];
     setChatMessages(newMsgs);
     setChatInput("");
     setChatLoading(true);
 
+    // Progressive delay: first 5 are instant, then adds 1s per message, max 8s
+    const delayMs = currentUserMsgs < 5 ? 0 : Math.min((currentUserMsgs - 4) * 1000, 8000);
+    if (delayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+
     const rosterSummary = myTeam.length > 0
       ? myTeam.map(p => `${p.name} (${p.pos}, ${p.team})`).join(", ")
       : "Empty";
-    const topAvail = available.slice(0, 20).map((p, i) => `${i+1}. ${p.name} (${p.pos}, ${p.team}, Tier: ${p.tier})`).join("\n");
+    const topAvail = available.slice(0, 25).map((p, i) => `${i+1}. ${p.name} (${p.pos}, ${p.team}, Tier: ${p.tier}, ADP: ${p.adp})`).join("\n");
     const posCount = pos => myTeam.filter(p => p.pos === pos).length;
     const curPick = snakePick.find(p => p.round === round);
+    const crossedOff = sorted.filter(p => struckIds.has(p.id) && !myTeam.some(tp => tp.id === p.id)).map(p => p.name).join(", ");
 
-    const systemPrompt = `You are Eli's fantasy football draft advisor embedded in his live draft board. Be direct, opinionated, and concise. Challenge weak logic but confirm good calls fast.
+    const systemPrompt = `You are the Depth Chart Sports draft advisor — an embedded AI assistant in a live fantasy football draft board. Today's date is September 2026. The 2026 NFL season is about to begin.
 
-LEAGUE: 12-team snake draft, ESPN, Full PPR, 6pt passing TDs, pick 3 overall.
+CRITICAL DATA RULES:
+- It is September 2026. The 2025 NFL season is OVER. Players drafted in the 2025 NFL Draft are entering their SECOND year, not their rookie year.
+- Players drafted in the 2026 NFL Draft are the actual rookies.
+- If you are unsure about a player's current team, role, year in the league, or any recent transaction — use web search. Do NOT guess.
+- Never say "as a rookie" about a second-year player. Never assume a player is on the same team as your training data suggests without verifying.
+- When asked about a player's situation, search for their current 2026 outlook before answering.
 
-ELI'S STRATEGY:
-- If Bijan Robinson available at pick 3: Take Robinson, then RB at pick 22, RB or Trey McBride at 27, WR rounds 4-6, QB rounds 6-8
-- If Robinson gone at pick 3: Take Jaxon Smith-Njigba, then RB-RB at picks 22/27 without deviation, McBride + WR mid-rounds
-- Puka Nacua removed from consideration (off-field + QB durability concerns)
+ADVISOR PERSONALITY:
+- Be direct, opinionated, and concise. Challenge weak logic but confirm good calls fast.
+- You are a thought partner, not a yes-man. Push back when something doesn't make sense.
+- Never break character. Never discuss how the app works, how you get data, or suggest API integrations. You are a draft advisor, period.
+- If asked about non-fantasy-football topics, redirect: "I'm your draft advisor — let's stay focused on your board."
+
+LEAGUE SETTINGS:
+- ${numTeams}-team ${draftType.toLowerCase()} draft, pick ${draftPos} overall
+- ${scoringRules ? `Scoring: ${scoringRules}` : "Full PPR (1 pt/reception), 6pt passing TDs, -2 INT, tiered kicker scoring (3/4/5/6 pts by FG distance)"}
+
+DRAFT STRATEGY PREFERENCES:
 - QB deprioritized to rounds 6-8 (learned from drafting Josh Allen too early last year)
-- Tiered kicker scoring (FG tiers: 3/4/5/6 pts) makes kicker streaming more impactful
+- Tiered kicker scoring makes kicker streaming more impactful
+- Prefers pressure-tested advice over validation
 
-CURRENT STATE:
-- Round: ${round}, Pick #${curPick?.pick || "?"}
-- Current recommendation: ${rec.pick ? `${rec.pick.name} (${rec.pick.pos}) — ${rec.reason}` : "None"}
-- My roster: ${rosterSummary}
+CURRENT BOARD STATE:
+- Round: ${round} | Total picks made: ${struckIds.size}
+- My roster (${myTeam.length} players): ${rosterSummary}
 - Position counts: QB:${posCount("QB")} RB:${posCount("RB")} WR:${posCount("WR")} TE:${posCount("TE")} K:${posCount("K")} DEF:${posCount("DEF")}
-- Top 20 available:
+- Players drafted by other teams: ${crossedOff || "None yet"}
+- Top 25 available players:
 ${topAvail}
 
-Keep responses under 150 words. No bullet points. Be a thought partner, not a yes-man.`;
+Keep responses under 150 words. No bullet points.`;
 
     const apiMessages = [];
     for (const m of newMsgs) {
@@ -651,7 +585,8 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
   return (
     <div style={{
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-      maxWidth: 520, margin: "0 auto", minHeight: "100vh",
+      maxWidth: 692, margin: "0 auto", height: "100vh",
+      display: "flex", flexDirection: "column", overflow: "hidden",
       background: "var(--bg)", color: "var(--fg)",
       "--bg": "#0d1117", "--fg": "#e6edf3", "--dim": "#7d8590",
       "--border": "#21262d", "--card": "#161b22", "--accent": "#58a6ff",
@@ -667,17 +602,57 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "var(--dim)" }}>Round</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-              <button onClick={() => setRound(r => Math.max(1, r - 1))}
-                style={{ background: "var(--tab-bg)", border: "none", color: "var(--fg)", borderRadius: 4, width: 24, height: 24, cursor: "pointer", fontSize: 14 }}>−</button>
-              <span style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)", minWidth: 24, textAlign: "center" }}>{round}</span>
-              <button onClick={() => setRound(r => Math.min(18, r + 1))}
-                style={{ background: "var(--tab-bg)", border: "none", color: "var(--fg)", borderRadius: 4, width: 24, height: 24, cursor: "pointer", fontSize: 14 }}>+</button>
-            </div>
-            {currentPick && <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 1 }}>Pick #{currentPick.pick}</div>}
+            <span style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)", display: "block", marginTop: 2 }}>{round}</span>
           </div>
         </div>
 
+        {/* Settings */}
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => setShowSettings(!showSettings)} style={{ fontSize: 12, background: "#1f6feb", border: "none", color: "#fff", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600 }}>
+            ⚙ Draft Settings
+          </button>
+          <span style={{ fontSize: 11, color: "var(--dim)" }}>{numTeams}-team {draftType} · Pick {draftPos}</span>
+          {customRankings && (
+            <span style={{ fontSize: 10, color: "var(--green)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+              ✓ Custom Rankings
+              <button onClick={() => { setCustomRankings(null); setCsvStatus(""); }} style={{ background: "none", border: "none", color: "var(--red)", fontSize: 10, cursor: "pointer", fontWeight: 700, padding: 0 }}>✕</button>
+            </span>
+          )}
+        </div>
+        {/* Settings — always rendered, visibility toggled */}
+          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap", alignItems: "flex-start", background: "#161b22", padding: 12, borderRadius: 8, visibility: showSettings ? "visible" : "hidden" }}>
+            <label style={{ fontSize: 11, color: "var(--dim)", fontWeight: 600 }}>Teams
+              <select value={numTeams} onChange={e => setNumTeams(Number(e.target.value))} style={{ marginLeft: 4, background: "#0d1117", color: "#c9d1d9", border: "1px solid #30363d", borderRadius: 4, padding: "2px 4px", fontSize: 11 }}>
+                {[8,10,12,14,16].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 11, color: "var(--dim)", fontWeight: 600 }}>Pick
+              <select value={draftPos} onChange={e => setDraftPos(Number(e.target.value))} style={{ marginLeft: 4, background: "#0d1117", color: "#c9d1d9", border: "1px solid #30363d", borderRadius: 4, padding: "2px 4px", fontSize: 11 }}>
+                {Array.from({length: numTeams}, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 11, color: "var(--dim)", fontWeight: 600 }}>Type
+              <select value={draftType} onChange={e => setDraftType(e.target.value)} style={{ marginLeft: 4, background: "#0d1117", color: "#c9d1d9", border: "1px solid #30363d", borderRadius: 4, padding: "2px 4px", fontSize: 11 }}>
+                {["Snake", "Linear", "Auction"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 11, color: "var(--dim)", fontWeight: 600, display: "flex", flexDirection: "column" }}>Scoring rules (paste your league's settings)
+              <textarea value={scoringRules} onChange={e => setScoringRules(e.target.value)} placeholder="e.g. Full PPR, 6pt passing TDs, -2 INT..." rows={2} style={{ marginTop: 4, background: "#0d1117", color: "#c9d1d9", border: "1px solid #30363d", borderRadius: 4, padding: 4, fontSize: 11, width: 280, resize: "vertical" }} />
+            </label>
+          </div>
+        {/* CSV Import — always visible below settings */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <label style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 6,
+            background: "var(--tab-bg)", color: "var(--dim)", fontSize: 11, fontWeight: 600, cursor: "pointer",
+            border: "1px solid var(--border)", transition: "all 0.15s",
+          }}>
+            📄 Import Rankings (CSV)
+            <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={handleCsvUpload} />
+          </label>
+          {csvStatus && <span style={{ fontSize: 11, color: csvStatus.includes("Error") ? "var(--red)" : "var(--green)" }}>{csvStatus}</span>}
+          {!csvStatus && <span style={{ fontSize: 10, color: "var(--dim)", opacity: 0.7 }}>Upload a ranked player list — positions auto-detected</span>}
+        </div>
         {/* Team count strip + picks until next + roster targets */}
         <div style={{ display: "flex", gap: 8, marginTop: 8, fontSize: 11, color: "var(--dim)", flexWrap: "wrap", alignItems: "center" }}>
           {["QB","RB","WR","TE","K","DEF"].map(pos => {
@@ -691,8 +666,10 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
           })}
           <span style={{ color: "var(--accent)", fontWeight: 600, marginLeft: "auto" }}>
             {(() => {
-              const pu = getPicksUntilNext(round, struckIds.size);
-              return pu !== null ? `${pu} picks til next` : "Last round";
+              const pu = getPicksUntilNext(struckIds.size, numTeams, draftPos, draftType);
+              if (!pu) return draftType === "Auction" ? "Auction" : "Draft complete";
+              if (pu.isMyPick) return "🟢 ON THE CLOCK";
+              return `${pu.picksAway} pick${pu.picksAway !== 1 ? "s" : ""} til next (#${pu.nextPick})`;
             })()}
           </span>
         </div>
@@ -743,6 +720,7 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
       )}
 
       {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
       {activeTab === "Advisor" ? (
         <div style={{ padding: 16 }}>
           <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--accent)", padding: 16, marginBottom: 16 }}>
@@ -778,7 +756,7 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
                   </div>
                 ) : null; })()}
 
-                <button onClick={() => { addToTeam(rec.pick); setRound(r => Math.min(18, r + 1)); }}
+                <button onClick={() => { addToTeam(rec.pick); }}
                   style={{
                     background: "var(--green)", color: "#000", border: "none", borderRadius: 6,
                     padding: "8px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%"
@@ -843,7 +821,7 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
               display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
               background: psteal ? `${psteal.color}08` : "var(--card)", borderRadius: 6, marginBottom: 4, cursor: "pointer",
               border: `1px solid ${psteal ? psteal.color + "30" : "var(--border)"}`
-            }} onClick={() => { addToTeam(p); setRound(r => Math.min(18, r + 1)); }}>
+            }} onClick={() => { addToTeam(p); }}>
               <span style={{ width: 20, fontSize: 11, color: "var(--dim)" }}>{i + 1}</span>
               <PosBadge pos={p.pos} />
               <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
@@ -859,7 +837,15 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
 
           {/* ── Chat Dialogue ── */}
           <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", marginBottom: 8 }}>Talk it out</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>Talk it out</div>
+              <div style={{
+                fontSize: 11, fontWeight: 600,
+                color: userMsgCount >= MESSAGE_CAP ? "var(--red)" : userMsgCount >= MESSAGE_CAP - 5 ? "#d29922" : "var(--dim)",
+              }}>
+                {userMsgCount}/{MESSAGE_CAP} questions
+              </div>
+            </div>
 
             {/* Messages */}
             <div style={{ maxHeight: 280, overflowY: "auto", marginBottom: 8 }}>
@@ -891,27 +877,38 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
               <div ref={el => { chatEndRef.current = el; if (el) el.scrollIntoView({ behavior: "smooth" }); }} />
             </div>
 
+            {/* Cap reached message */}
+            {isAtCap && (
+              <div style={{
+                padding: "10px 12px", borderRadius: 8, marginBottom: 8, fontSize: 12, lineHeight: 1.4,
+                background: "#f8514915", border: "1px solid #f8514940", color: "#f85149", textAlign: "center",
+              }}>
+                You've used all {MESSAGE_CAP} questions for this session. Upgrade to Front Office for more.
+              </div>
+            )}
+
             {/* Input */}
             <div style={{ display: "flex", gap: 6 }}>
               <input
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !chatLoading) sendChat(chatInput); }}
-                placeholder="Debate a pick..."
-                disabled={chatLoading}
+                onKeyDown={e => { if (e.key === "Enter" && !chatLoading && !isAtCap) sendChat(chatInput); }}
+                placeholder={isAtCap ? "Message limit reached" : "Debate a pick..."}
+                disabled={chatLoading || isAtCap}
                 style={{
                   flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)",
                   background: "var(--card)", color: "var(--fg)", fontSize: 13, outline: "none",
+                  opacity: isAtCap ? 0.5 : 1,
                 }}
               />
               <button
                 onClick={() => sendChat(chatInput)}
-                disabled={chatLoading || !chatInput.trim()}
+                disabled={chatLoading || !chatInput.trim() || isAtCap}
                 style={{
                   padding: "8px 14px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13,
-                  background: chatLoading || !chatInput.trim() ? "var(--tab-bg)" : "var(--accent)",
-                  color: chatLoading || !chatInput.trim() ? "var(--dim)" : "#000",
-                  cursor: chatLoading || !chatInput.trim() ? "default" : "pointer",
+                  background: chatLoading || !chatInput.trim() || isAtCap ? "var(--tab-bg)" : "var(--accent)",
+                  color: chatLoading || !chatInput.trim() || isAtCap ? "var(--dim)" : "#000",
+                  cursor: chatLoading || !chatInput.trim() || isAtCap ? "default" : "pointer",
                 }}
               >Send</button>
             </div>
@@ -919,24 +916,67 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
         </div>
       ) : activeTab === "My Team" ? (
         <div style={{ padding: 16 }}>
+          {/* Search + Add Player */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>Add Player</div>
+            <input
+              value={teamSearch}
+              onChange={e => setTeamSearch(e.target.value)}
+              placeholder="Search to add a player..."
+              style={{
+                width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
+                background: "var(--card)", color: "var(--fg)", fontSize: 13, outline: "none", boxSizing: "border-box",
+              }}
+            />
+            {teamSearch.trim() && (
+              <div style={{ maxHeight: 160, overflowY: "auto", marginTop: 4, borderRadius: 6, border: "1px solid var(--border)", background: "var(--card)" }}>
+                {sorted
+                  .filter(p => !myTeam.some(tp => tp.id === p.id))
+                  .filter(p => p.name.toLowerCase().includes(teamSearch.toLowerCase()) || p.team.toLowerCase().includes(teamSearch.toLowerCase()))
+                  .slice(0, 8)
+                  .map(p => (
+                    <div key={p.id} onClick={() => { addToTeam(p); setTeamSearch(""); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", cursor: "pointer",
+                        borderBottom: "1px solid var(--border)", transition: "background 0.1s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--tab-bg)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <PosBadge pos={p.pos} />
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{p.name}</span>
+                      <span style={{ fontSize: 11, color: "var(--dim)" }}>{p.team}</span>
+                      <span style={{ fontSize: 11, color: "var(--green)", fontWeight: 700 }}>+ Add</span>
+                    </div>
+                  ))}
+                {sorted.filter(p => !myTeam.some(tp => tp.id === p.id)).filter(p => p.name.toLowerCase().includes(teamSearch.toLowerCase()) || p.team.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
+                  <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--dim)" }}>No matching players found</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Roster */}
           {myTeam.length === 0 ? (
             <p style={{ color: "var(--dim)", fontSize: 13, textAlign: "center", padding: 32 }}>
-              No players drafted yet. Use the Advisor tab or click "Draft" on any player.
+              No players drafted yet. Hit the Draft button on any player or search above.
             </p>
           ) : (
             <>
+              <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 8 }}>{myTeam.length} player{myTeam.length !== 1 ? "s" : ""} drafted</div>
               {["QB","RB","WR","TE","K","DEF"].map(pos => {
                 const posPlayers = myTeam.filter(p => p.pos === pos);
                 if (posPlayers.length === 0) return null;
                 return (
                   <div key={pos} style={{ marginBottom: 12 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--dim)", marginBottom: 4, textTransform: "uppercase" }}>{pos}</div>
-                    {posPlayers.map(p => (
+                    {posPlayers.map((p, idx) => (
                       <div key={p.id} style={{
                         display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
                         background: "var(--card)", borderRadius: 6, marginBottom: 3,
                         border: "1px solid var(--border)"
                       }}>
+                        <span style={{ fontSize: 10, color: "var(--dim)", width: 16, textAlign: "center" }}>{idx + 1}</span>
                         <PosBadge pos={p.pos} />
                         <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{p.name}</span>
                         <span style={{ fontSize: 11, color: "var(--dim)" }}>{p.team}</span>
@@ -951,7 +991,7 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
           )}
         </div>
       ) : (
-        <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 220px)" }}>
+        <div>
           {/* Column headers */}
           <div style={{
             display: "flex", alignItems: "center", gap: 8, padding: "4px 12px",
@@ -975,6 +1015,9 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
               onToggle={toggle}
               compact={activeTab === "Overall"}
               stealLevel={sl}
+              onDraft={(player) => { addToTeam(player); }}
+              onUndraft={removeFromTeam}
+              isDrafted={myTeam.some(tp => tp.id === p.id)}
             />
             );
           })}
@@ -983,6 +1026,7 @@ Keep responses under 150 words. No bullet points. Be a thought partner, not a ye
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

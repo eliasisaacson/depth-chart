@@ -1,5 +1,6 @@
 "use client";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { PLAYERS } from "../players";
 
 // ── Mock Data: Week 5 scenario ──────────────────────────────────────────
 // User drafted with the draft board, now 4 weeks in
@@ -97,6 +98,22 @@ export default function WaiverWire() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [myDraftedTeam, setMyDraftedTeam] = useState([]);
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [pendingAction, setPendingAction] = useState(null);
+
+  // Load roster from draft board via localStorage — re-reads on focus
+  useEffect(() => {
+    const loadRoster = () => {
+      try {
+        const saved = localStorage.getItem("depthchart-myteam");
+        if (saved) setMyDraftedTeam(JSON.parse(saved));
+      } catch {}
+    };
+    loadRoster();
+    window.addEventListener("focus", loadRoster);
+    return () => window.removeEventListener("focus", loadRoster);
+  }, []);
 
   const rosterByPos = useMemo(() => {
     const groups = {};
@@ -125,6 +142,10 @@ export default function WaiverWire() {
     setChatInput("");
     setChatLoading(true);
 
+    // Use real roster from draft board if available
+    const myDraftedRosterStr = myDraftedTeam.length > 0
+      ? myDraftedTeam.map(p => `${p.name} (${p.pos}, ${p.team}, Bye: ${p.bye})`).join("\n")
+      : null;
     const rosterStr = MY_ROSTER.map(p =>
       `${p.name} (${p.pos}, ${p.team}, ${p.status}${p.injury ? ": " + p.injury : ""}, proj: ${p.proj})`
     ).join("\n");
@@ -135,10 +156,24 @@ export default function WaiverWire() {
       `[${m.urgency}] Add ${m.add}, Drop ${m.drop} — ${m.reason}`
     ).join("\n");
 
-    const systemPrompt = `You are Depth Chart GM, a fantasy football waiver wire advisor. It's Week 5 of the 2026 NFL season. Be direct, opinionated, concise. Challenge bad ideas, confirm good ones fast.
+    const systemPrompt = `You are Depth Chart GM — a fantasy football waiver wire and trade advisor embedded in a live GM dashboard. Today's date is September 2026. The 2026 NFL season is underway.
+
+CRITICAL DATA RULES:
+- It is the 2026 NFL season. Players drafted in the 2025 NFL Draft are in their SECOND year, not rookies.
+- Players drafted in the 2026 NFL Draft are the actual rookies.
+- If you are unsure about a player's current team, injury status, waiver availability, or any recent news — use web search. Do NOT guess.
+- Always verify injury timelines and player roles before making add/drop recommendations.
+
+ADVISOR PERSONALITY:
+- Be direct, opinionated, and concise. Challenge bad ideas, confirm good ones fast.
+- Never break character. Never discuss how the app works, APIs, or data sources. You are a GM, period.
+- If asked about non-fantasy-football topics, redirect: "I'm your GM advisor — let's stay focused on your roster."
 
 LEAGUE: 12-team, Full PPR, ESPN
-
+${myDraftedRosterStr ? `
+MY DRAFTED TEAM:
+${myDraftedRosterStr}
+` : ""}
 MY ROSTER:
 ${rosterStr}
 
@@ -182,7 +217,7 @@ Keep responses under 150 words. No bullet points.`;
   return (
     <div style={{
       fontFamily: "'DM Sans', 'Inter', -apple-system, sans-serif",
-      maxWidth: 520, margin: "0 auto", minHeight: "100vh",
+      maxWidth: 692, margin: "0 auto", minHeight: "100vh",
       background: "#090b10", color: "#c9d1d9",
     }}>
       {/* Header */}
@@ -321,56 +356,112 @@ Keep responses under 150 words. No bullet points.`;
       {/* ── My Roster ── */}
       {activeView === "roster" && (
         <div style={{ padding: 14 }}>
-          {["QB", "RB", "WR", "TE", "K", "DEF"].map(pos => {
-            const players = rosterByPos[pos];
-            if (!players) return null;
-            return (
-              <div key={pos} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#484f58", marginBottom: 6 }}>{pos}</div>
-                {players.map(p => (
-                  <div key={p.id} style={{
-                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
-                    background: "#0d1117", borderRadius: 6, marginBottom: 4,
-                    border: p.status === "injured" ? "1px solid #f8514940" : p.status === "questionable" ? "1px solid #d2992240" : "1px solid #161b22",
-                  }}>
-                    <PosBadge pos={p.pos} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>
-                        {p.name}
-                        {p.status === "injured" && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, padding: "0 4px", borderRadius: 3, background: "#f85149", color: "#fff" }}>OUT</span>}
-                        {p.status === "questionable" && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, padding: "0 4px", borderRadius: 3, background: "#d29922", color: "#000" }}>Q</span>}
-                      </div>
-                      {p.injury && <div style={{ fontSize: 10, color: "#f85149", marginTop: 2 }}>{p.injury}</div>}
+          {/* Add Player Search */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#58a6ff", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+              {pendingAction ? (pendingAction.type === "trade" ? `Trade away ${pendingAction.player.name} — who are you getting?` : `Replacing ${pendingAction.player.name} — add who?`) : "Add Player"}
+            </div>
+            <input
+              value={rosterSearch}
+              onChange={e => setRosterSearch(e.target.value)}
+              placeholder="Search player to add..."
+              style={{
+                width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #21262d",
+                background: "#0d1117", color: "#e6edf3", fontSize: 13, outline: "none", boxSizing: "border-box",
+              }}
+            />
+            {rosterSearch.trim() && (
+              <div style={{ maxHeight: 160, overflowY: "auto", marginTop: 4, borderRadius: 6, border: "1px solid #21262d", background: "#0d1117" }}>
+                {PLAYERS
+                  .filter(p => !myDraftedTeam.some(tp => tp.id === p.id))
+                  .filter(p => p.name.toLowerCase().includes(rosterSearch.toLowerCase()) || p.team.toLowerCase().includes(rosterSearch.toLowerCase()))
+                  .slice(0, 8)
+                  .map(p => (
+                    <div key={p.id} onClick={() => {
+                      const updated = [...myDraftedTeam, p];
+                      setMyDraftedTeam(updated);
+                      localStorage.setItem("depthchart-myteam", JSON.stringify(updated));
+                      setRosterSearch("");
+                      setPendingAction(null);
+                    }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", cursor: "pointer",
+                        borderBottom: "1px solid #161b22", transition: "background 0.1s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#161b22"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <PosBadge pos={p.pos} />
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#e6edf3" }}>{p.name}</span>
+                      <span style={{ fontSize: 11, color: "#484f58" }}>{p.team}</span>
+                      <span style={{ fontSize: 11, color: "#3fb950", fontWeight: 700 }}>+ Add</span>
                     </div>
-                    <span style={{ fontSize: 10, color: "#484f58" }}>{p.team}</span>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#58a6ff" }}>{p.proj > 0 ? p.proj : "—"}</div>
-                      <div style={{ fontSize: 9, color: "#484f58" }}>proj</div>
-                    </div>
-                    {/* Mini sparkline */}
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 20 }}>
-                      {p.pts.map((pt, i) => (
-                        <div key={i} style={{
-                          width: 4, borderRadius: 1,
-                          height: Math.max(2, (pt / 32) * 20),
-                          background: pt === 0 ? "#f8514960" : i === p.pts.length - 1 ? "#58a6ff" : "#30363d",
-                        }} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                {PLAYERS.filter(p => !myDraftedTeam.some(tp => tp.id === p.id)).filter(p => p.name.toLowerCase().includes(rosterSearch.toLowerCase()) || p.team.toLowerCase().includes(rosterSearch.toLowerCase())).length === 0 && (
+                  <div style={{ padding: "8px 10px", fontSize: 12, color: "#484f58" }}>No matching players found</div>
+                )}
               </div>
-            );
-          })}
-
-          <div style={{
-            display: "flex", gap: 16, padding: "12px 0", borderTop: "1px solid #161b22",
-            marginTop: 8, fontSize: 11, color: "#484f58",
-          }}>
-            <span>Season avg: <span style={{ color: "#58a6ff", fontWeight: 700 }}>142.3</span></span>
-            <span>League rank: <span style={{ color: "#3fb950", fontWeight: 700 }}>3rd</span></span>
-            <span>Record: <span style={{ color: "#e6edf3", fontWeight: 700 }}>3-1</span></span>
+            )}
+            {pendingAction && (
+              <button onClick={() => { setPendingAction(null); setRosterSearch(""); }} style={{
+                marginTop: 6, padding: "4px 10px", borderRadius: 4, border: "1px solid #21262d",
+                background: "transparent", color: "#484f58", fontSize: 11, cursor: "pointer",
+              }}>Cancel</button>
+            )}
           </div>
+
+          {/* Roster list */}
+          {myDraftedTeam.length === 0 ? (
+            <div style={{ fontSize: 13, color: "#484f58", textAlign: "center", padding: 32 }}>
+              No roster found. Draft players on the Draft Board first, or add players above.
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 11, color: "#484f58", marginBottom: 8 }}>{myDraftedTeam.length} players</div>
+              {["QB","RB","WR","TE","K","DEF"].map(pos => {
+                const posPlayers = myDraftedTeam.filter(p => p.pos === pos);
+                if (posPlayers.length === 0) return null;
+                return (
+                  <div key={pos} style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#484f58", marginBottom: 6 }}>{pos}</div>
+                    {posPlayers.map(p => (
+                      <div key={p.id} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                        background: "#0d1117", borderRadius: 6, marginBottom: 4,
+                        border: "1px solid #161b22",
+                      }}>
+                        <PosBadge pos={p.pos} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>{p.name}</div>
+                        </div>
+                        <span style={{ fontSize: 10, color: "#484f58" }}>{p.team}</span>
+                        <button onClick={() => {
+                          setPendingAction({ type: "trade", player: p });
+                          const updated = myDraftedTeam.filter(tp => tp.id !== p.id);
+                          setMyDraftedTeam(updated);
+                          localStorage.setItem("depthchart-myteam", JSON.stringify(updated));
+                          setRosterSearch("");
+                        }} style={{
+                          padding: "3px 8px", borderRadius: 4, border: "none", fontSize: 10, fontWeight: 700,
+                          background: "#58a6ff", color: "#000", cursor: "pointer",
+                        }}>Trade</button>
+                        <button onClick={() => {
+                          setPendingAction({ type: "drop", player: p });
+                          const updated = myDraftedTeam.filter(tp => tp.id !== p.id);
+                          setMyDraftedTeam(updated);
+                          localStorage.setItem("depthchart-myteam", JSON.stringify(updated));
+                          setRosterSearch("");
+                        }} style={{
+                          padding: "3px 8px", borderRadius: 4, border: "none", fontSize: 10, fontWeight: 700,
+                          background: "#f85149", color: "#fff", cursor: "pointer",
+                        }}>Drop</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
 

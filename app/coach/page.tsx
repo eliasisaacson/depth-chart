@@ -1,49 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
-
-// ── Week 5 Matchup Data ─────────────────────────────────────────────────
-// Same roster as GM screen, now deciding who to start
-
-const LINEUP = {
-  starters: [
-    {id:1,name:"Drake Maye",pos:"QB",team:"NE",opp:"@BUF",oppRk:18,proj:19.2,floor:14,ceil:28,status:"healthy",note:"BUF allows 5th most pass yds at home",verdict:"start",confidence:82},
-    {id:2,name:"Bijan Robinson",pos:"RB",team:"ATL",opp:"vs DET",oppRk:22,proj:24.8,floor:18,ceil:34,status:"healthy",note:"DET allows 3rd most RB receptions",verdict:"must-start",confidence:97},
-    {id:3,name:"Omarion Hampton",pos:"RB",team:"LAC",opp:"vs ARI",oppRk:28,proj:18.5,floor:13,ceil:26,status:"healthy",note:"ARI run D ranks 28th — smash spot",verdict:"start",confidence:88},
-    {id:5,name:"Jaxon Smith-Njigba",pos:"WR",team:"SEA",opp:"@NYJ",oppRk:4,proj:16.2,floor:10,ceil:24,status:"healthy",note:"NYJ secondary is elite but JSN runs slot — Sauce plays outside",verdict:"start",confidence:76},
-    {id:6,name:"Emeka Egbuka",pos:"WR",team:"TB",opp:"vs CHI",oppRk:14,proj:14.0,floor:9,ceil:22,status:"healthy",note:"Neutral matchup — Egbuka's target share is steady",verdict:"start",confidence:71},
-    {id:9,name:"Trey McBride",pos:"TE",team:"ARI",opp:"@LAC",oppRk:20,proj:16.8,floor:11,ceil:24,status:"healthy",note:"LAC allows TE receptions at 6th highest rate",verdict:"start",confidence:85},
-    {id:7,name:"Terry McLaurin",pos:"WR",team:"WAS",opp:"vs CLE",oppRk:6,proj:12.4,floor:7,ceil:21,status:"healthy",note:"CLE has 2nd most INTs — Daniels may check down more",verdict:"flex",confidence:62},
-    {id:10,name:"Cameron Dicker",pos:"K",team:"LAC",opp:"vs ARI",oppRk:0,proj:9.5,floor:5,ceil:14,status:"healthy",note:"LAC offense should move the ball — expect FG chances",verdict:"start",confidence:70},
-    {id:11,name:"Denver DEF",pos:"DEF",team:"DEN",opp:"@KC",oppRk:0,proj:5.2,floor:1,ceil:10,status:"healthy",note:"KC offense limited but at Arrowhead — low ceiling",verdict:"sit",confidence:40},
-  ],
-  bench: [
-    {id:4,name:"Bhayshul Tuten",pos:"RB",team:"JAX",opp:"vs MIA",oppRk:0,proj:0,floor:0,ceil:0,status:"injured",injury:"Hamstring — out 2-3 weeks",verdict:"cant-play",confidence:0},
-    {id:8,name:"Luther Burden III",pos:"WR",team:"CHI",opp:"@TB",oppRk:19,proj:11.2,floor:5,ceil:19,status:"questionable",injury:"Groin — limited practice",note:"If active, TB allows WR points at above-average rate",verdict:"risky-start",confidence:48},
-    {id:12,name:"Rico Dowdle",pos:"RB",team:"PIT",opp:"vs DAL",oppRk:12,proj:8.8,floor:4,ceil:15,status:"healthy",note:"DAL run D is average — Dowdle's floor is low in timeshare",verdict:"sit",confidence:35},
-    {id:13,name:"Wan'Dale Robinson",pos:"WR",team:"TEN",opp:"@MIN",oppRk:3,proj:7.5,floor:3,ceil:14,status:"healthy",note:"MIN defense is top 3 vs WR — bad week for Wan'Dale",verdict:"sit",confidence:25},
-  ],
-};
-
-const DECISIONS = [
-  {
-    type: "lineup-alert",
-    urgency: "critical",
-    title: "Stream a defense — sit Denver",
-    detail: "Denver projects at 5.2 against KC at Arrowhead. If Pittsburgh DEF is on waivers (they face CAR), grab them. Even without a stream, any top-12 matchup defense outscores Denver this week.",
-  },
-  {
-    type: "flex-debate",
-    urgency: "high",
-    title: "Flex: McLaurin vs Burden vs Dowdle",
-    detail: "McLaurin is the safe play despite Cleveland's secondary — his target floor is 6+. Burden has higher upside if active (TB matchup is juicy) but the groin makes him a game-time decision. Dowdle's ceiling is too low in a timeshare. Go McLaurin unless Burden is a full participant Friday.",
-  },
-  {
-    type: "matchup-exploit",
-    urgency: "medium",
-    title: "Hampton is a top-5 play this week",
-    detail: "Arizona's run defense ranks 28th in yards allowed and 30th in fantasy points to RBs. Hampton should see 20+ touches with goal-line work. This is a ceiling game — don't overthink it.",
-  },
-];
+import { useState, useCallback, useEffect, useMemo } from "react";
 
 const POS_COLORS = {
   QB: { bg: "#fce4ec", text: "#c62828" },
@@ -54,13 +10,24 @@ const POS_COLORS = {
   DEF:{ bg: "#eceff1", text: "#37474f" },
 };
 
+const STARTER_SLOTS = [
+  { key: "QB", label: "QB", eligible: ["QB"] },
+  { key: "RB1", label: "RB1", eligible: ["RB"] },
+  { key: "RB2", label: "RB2", eligible: ["RB"] },
+  { key: "WR1", label: "WR1", eligible: ["WR"] },
+  { key: "WR2", label: "WR2", eligible: ["WR"] },
+  { key: "TE", label: "TE", eligible: ["TE"] },
+  { key: "FLEX", label: "FLEX", eligible: ["RB", "WR", "TE"] },
+  { key: "K", label: "K", eligible: ["K"] },
+  { key: "DEF", label: "DEF", eligible: ["DEF"] },
+];
+
 const VERDICT_STYLE = {
-  "must-start": { color: "#3fb950", label: "MUST START" },
-  "start":      { color: "#3fb950", label: "START" },
-  "flex":       { color: "#58a6ff", label: "FLEX" },
-  "risky-start":{ color: "#d29922", label: "RISKY START" },
-  "sit":        { color: "#f85149", label: "SIT" },
-  "cant-play":  { color: "#484f58", label: "OUT" },
+  "MUST START": { color: "#3fb950" },
+  "START":      { color: "#3fb950" },
+  "FLEX":       { color: "#58a6ff" },
+  "SIT":        { color: "#f85149" },
+  "BENCH":      { color: "#f85149" },
 };
 
 const URGENCY_COLORS = {
@@ -79,94 +46,228 @@ function PosBadge({ pos }) {
   );
 }
 
-function ConfidenceBar({ value }) {
-  const color = value >= 75 ? "#3fb950" : value >= 50 ? "#d29922" : "#f85149";
-  return (
-    <div style={{ width: 40, height: 4, borderRadius: 2, background: "#21262d", overflow: "hidden" }}>
-      <div style={{ width: `${value}%`, height: "100%", borderRadius: 2, background: color }} />
-    </div>
-  );
+// Auto-assign players to starting slots in draft order
+function autoAssignLineup(players) {
+  const lineup = {};
+  const used = new Set();
+
+  // Go through players in draft order and assign to first open eligible slot
+  for (const player of players) {
+    let assigned = false;
+
+    // First try to fill primary position slots (QB, RB1, RB2, WR1, WR2, TE, K, DEF)
+    for (const slot of STARTER_SLOTS) {
+      if (slot.key === "FLEX") continue; // Fill flex after primary slots
+      if (lineup[slot.key]) continue; // Slot already filled
+      if (!slot.eligible.includes(player.pos)) continue; // Wrong position
+      lineup[slot.key] = player;
+      used.add(player.id);
+      assigned = true;
+      break;
+    }
+
+    // If not assigned to a primary slot, try flex
+    if (!assigned && !lineup["FLEX"] && ["RB", "WR", "TE"].includes(player.pos)) {
+      lineup["FLEX"] = player;
+      used.add(player.id);
+    }
+  }
+
+  const bench = players.filter(p => !used.has(p.id));
+  return { lineup, bench };
 }
 
-function ProjectionBar({ floor, proj, ceil }) {
-  const max = Math.max(ceil, 35);
-  const floorPct = (floor / max) * 100;
-  const projPct = (proj / max) * 100;
-  const ceilPct = (ceil / max) * 100;
-  return (
-    <div style={{ position: "relative", width: "100%", height: 8, marginTop: 4 }}>
-      {/* Range bar */}
-      <div style={{
-        position: "absolute", top: 2, height: 4, borderRadius: 2,
-        left: `${floorPct}%`, width: `${ceilPct - floorPct}%`,
-        background: "#21262d",
-      }} />
-      {/* Projection dot */}
-      {proj > 0 && <div style={{
-        position: "absolute", top: 0, width: 8, height: 8, borderRadius: "50%",
-        background: "#58a6ff", left: `calc(${projPct}% - 4px)`,
-      }} />}
-      {/* Labels */}
-      <div style={{ position: "absolute", top: 10, left: `${floorPct}%`, fontSize: 8, color: "#484f58" }}>{floor}</div>
-      <div style={{ position: "absolute", top: 10, left: `calc(${ceilPct}% - 8px)`, fontSize: 8, color: "#484f58" }}>{ceil}</div>
-    </div>
-  );
-}
-
-function PlayerCard({ player, isStarter }) {
-  const v = VERDICT_STYLE[player.verdict] || { color: "#484f58", label: "—" };
-  const isDead = player.verdict === "cant-play";
-
-  return (
-    <div style={{
-      background: "#0d1117", borderRadius: 8, border: "1px solid #161b22",
-      padding: "10px 12px", marginBottom: 6, opacity: isDead ? 0.45 : 1,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <PosBadge pos={player.pos} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>{player.name}</span>
-            {player.status === "injured" && <span style={{ fontSize: 9, fontWeight: 800, padding: "0 4px", borderRadius: 3, background: "#f85149", color: "#fff" }}>OUT</span>}
-            {player.status === "questionable" && <span style={{ fontSize: 9, fontWeight: 800, padding: "0 4px", borderRadius: 3, background: "#d29922", color: "#000" }}>Q</span>}
-          </div>
-          <div style={{ fontSize: 10, color: "#484f58", marginTop: 1 }}>
-            {player.team} {player.opp}
-            {player.oppRk > 0 && <span> · Opp {player.pos} rank: <span style={{ color: player.oppRk >= 20 ? "#3fb950" : player.oppRk <= 8 ? "#f85149" : "#d29922", fontWeight: 600 }}>#{player.oppRk}</span></span>}
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: v.color }}>{v.label}</span>
-          {player.confidence > 0 && (
-            <div style={{ marginTop: 3 }}>
-              <ConfidenceBar value={player.confidence} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {!isDead && (
-        <>
-          <ProjectionBar floor={player.floor} proj={player.proj} ceil={player.ceil} />
-          <div style={{ fontSize: 11, color: "#7d8590", marginTop: 10, lineHeight: 1.4 }}>
-            {player.note}
-          </div>
-        </>
-      )}
-      {player.injury && (
-        <div style={{ fontSize: 10, color: "#f85149", marginTop: 4 }}>{player.injury}</div>
-      )}
-    </div>
-  );
-}
-
-// ── Main Component ──────────────────────────────────────────────────────
 export default function CoachView() {
-  const [activeView, setActiveView] = useState("decisions");
+  const [activeView, setActiveView] = useState("lineup");
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [myTeam, setMyTeam] = useState([]);
+  const [lineup, setLineup] = useState({});
+  const [bench, setBench] = useState([]);
+  const [analysis, setAnalysis] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [hasRecommendation, setHasRecommendation] = useState(false);
 
+  // Load roster and lineup from localStorage
+  useEffect(() => {
+    const loadData = () => {
+      try {
+        const saved = localStorage.getItem("depthchart-myteam");
+        if (saved) {
+          const team = JSON.parse(saved);
+          setMyTeam(team);
+          const teamIds = new Set(team.map(p => p.id));
+
+          // Load saved lineup or auto-assign
+          const savedLineup = localStorage.getItem("depthchart-lineup");
+          if (savedLineup) {
+            const parsed = JSON.parse(savedLineup);
+            const existingLineup = parsed.lineup || {};
+            const existingBench = parsed.bench || [];
+
+            // Remove players no longer on team from lineup
+            const cleanedLineup = {};
+            const usedIds = new Set();
+            for (const [slot, player] of Object.entries(existingLineup)) {
+              if (player && teamIds.has(player.id)) {
+                cleanedLineup[slot] = player;
+                usedIds.add(player.id);
+              } else {
+                cleanedLineup[slot] = null;
+              }
+            }
+
+            // Remove players no longer on team from bench, keep the rest
+            const cleanedBench = existingBench.filter(p => teamIds.has(p.id));
+            cleanedBench.forEach(p => usedIds.add(p.id));
+
+            // Add any new players (from draft/GM) to bench
+            const newPlayers = team.filter(p => !usedIds.has(p.id));
+            const finalBench = [...cleanedBench, ...newPlayers];
+
+            setLineup(cleanedLineup);
+            setBench(finalBench);
+          } else {
+            const { lineup: auto, bench: autoBench } = autoAssignLineup(team);
+            setLineup(auto);
+            setBench(autoBench);
+          }
+        }
+      } catch {}
+      // Load cached analysis
+      try {
+        const cachedAnalysis = localStorage.getItem("depthchart-coach-analysis");
+        const cachedTime = localStorage.getItem("depthchart-coach-timestamp");
+        if (cachedAnalysis) {
+          setAnalysis(JSON.parse(cachedAnalysis));
+          if (cachedTime) setLastRefreshed(cachedTime);
+        }
+      } catch {}
+    };
+    loadData();
+    window.addEventListener("focus", loadData);
+    return () => window.removeEventListener("focus", loadData);
+  }, []);
+
+  // Save lineup whenever it changes
+  const saveLineup = useCallback((newLineup, newBench) => {
+    setLineup(newLineup);
+    setBench(newBench);
+    localStorage.setItem("depthchart-lineup", JSON.stringify({ lineup: newLineup, bench: newBench }));
+  }, []);
+
+  // Refresh matchup analysis
+  const refreshAnalysis = useCallback(async () => {
+    if (myTeam.length === 0) return;
+    setAnalysisLoading(true);
+
+    const rosterStr = myTeam.map(p => `${p.name} (${p.pos}, ${p.team}, Bye: ${p.bye})`).join("\n");
+
+    // Build current lineup string
+    const lineupStr = STARTER_SLOTS.map(slot => {
+      const p = lineup[slot.key];
+      return p ? `${slot.label}: ${p.name} (${p.pos}, ${p.team})` : `${slot.label}: EMPTY`;
+    }).join("\n");
+
+    const systemPrompt = `You are a fantasy football lineup analyzer. Today's date is September 2026.
+
+YOUR ONLY JOB: Return a JSON object. Nothing else. No text before or after the JSON. No explanations. No markdown. Just the JSON object.
+
+Search for each player's current week matchup, opponent, and injury status. Then build the optimal lineup.
+
+FULL ROSTER:
+${rosterStr}
+
+CURRENT LINEUP SET BY USER:
+${lineupStr}
+
+Return this exact JSON structure:
+{"starters":[{"name":"Player Name","pos":"QB","team":"TM","slot":"QB","opp":"vs OPP","oppRank":15,"verdict":"START","confidence":85,"note":"Short matchup note"}],"bench":[{"name":"Player Name","pos":"RB","team":"TM","opp":"@ OPP","oppRank":5,"verdict":"SIT","confidence":30,"note":"Why they sit"}],"keyDecisions":[{"title":"Decision headline","detail":"Brief explanation","urgency":"high"}]}
+
+Rules:
+- Fill slots: QB, RB1, RB2, WR1, WR2, TE, FLEX (best remaining RB/WR/TE), K, DEF
+- Include "slot" field matching the slot key (QB, RB1, RB2, WR1, WR2, TE, FLEX, K, DEF)
+- Everyone else in bench array
+- oppRank: 1=toughest, 32=easiest
+- verdict: MUST START, START, FLEX, SIT, or BENCH
+- confidence: 0-100
+- keyDecisions: 1-3 important calls, urgency: critical/high/medium
+- Notes under 15 words each
+- If your recommended lineup differs from the user's current lineup, note the changes in keyDecisions
+
+RESPOND WITH ONLY THE JSON OBJECT.`;
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system: systemPrompt,
+          messages: [{ role: "user", content: "Generate my optimal lineup for this week with matchup analysis." }],
+          max_tokens: 4000,
+        }),
+      });
+      const data = await response.json();
+      const raw = data.content?.map(b => b.text || "").join("") || "";
+      let cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const jsonStart = cleaned.indexOf("{");
+      const jsonEnd = cleaned.lastIndexOf("}");
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+      }
+      try {
+        const parsed = JSON.parse(cleaned);
+        setAnalysis(parsed);
+        setHasRecommendation(true);
+        const timestamp = new Date().toLocaleString();
+        setLastRefreshed(timestamp);
+        localStorage.setItem("depthchart-coach-analysis", JSON.stringify(parsed));
+        localStorage.setItem("depthchart-coach-timestamp", timestamp);
+      } catch (parseErr) {
+        console.error("JSON parse error:", parseErr, "\nRaw:", raw);
+        setAnalysis({ error: "The coach couldn't format the analysis. Try refreshing again." });
+      }
+    } catch (err) {
+      console.error("Analysis error:", err);
+    }
+    setAnalysisLoading(false);
+  }, [myTeam, lineup]);
+
+  // Apply recommended lineup
+  const applyRecommendation = useCallback(() => {
+    if (!analysis?.starters) return;
+    const newLineup = {};
+    const usedIds = new Set();
+
+    // Map recommended starters to slots
+    for (const rec of analysis.starters) {
+      const slot = rec.slot || rec.pos;
+      const player = myTeam.find(p => p.name === rec.name);
+      if (player && !usedIds.has(player.id)) {
+        newLineup[slot] = player;
+        usedIds.add(player.id);
+      }
+    }
+
+    // Fill any missing slots from current lineup
+    for (const slot of STARTER_SLOTS) {
+      if (!newLineup[slot.key] && lineup[slot.key]) {
+        const current = lineup[slot.key];
+        if (!usedIds.has(current.id)) {
+          newLineup[slot.key] = current;
+          usedIds.add(current.id);
+        }
+      }
+    }
+
+    const newBench = myTeam.filter(p => !usedIds.has(p.id));
+    saveLineup(newLineup, newBench);
+    setHasRecommendation(false);
+  }, [analysis, myTeam, lineup, saveLineup]);
+
+  // Chat
   const sendChat = useCallback(async (userMsg) => {
     if (!userMsg.trim()) return;
     const newMsgs = [...chatMessages, { role: "user", text: userMsg }];
@@ -174,32 +275,28 @@ export default function CoachView() {
     setChatInput("");
     setChatLoading(true);
 
-    const allPlayers = [...LINEUP.starters, ...LINEUP.bench];
-    const rosterStr = allPlayers.map(p =>
-      `${p.name} (${p.pos}, ${p.team} ${p.opp}, proj:${p.proj}, floor:${p.floor}, ceil:${p.ceil}, oppRk:${p.oppRk}, status:${p.status}${p.injury ? " — "+p.injury : ""}, verdict:${p.verdict})`
-    ).join("\n");
-    const decisionsStr = DECISIONS.map(d =>
-      `[${d.urgency}] ${d.title}: ${d.detail}`
-    ).join("\n");
+    const rosterStr = myTeam.map(p => `${p.name} (${p.pos}, ${p.team}, Bye: ${p.bye})`).join("\n");
+    const lineupStr = STARTER_SLOTS.map(slot => {
+      const p = lineup[slot.key];
+      return p ? `${slot.label}: ${p.name}` : `${slot.label}: EMPTY`;
+    }).join(", ");
+    const analysisStr = analysis?.starters
+      ? `Current analysis: ${analysis.starters.map(p => `${p.name} (${p.verdict}, ${p.opp})`).join(", ")}`
+      : "";
 
-    const systemPrompt = `You are Depth Chart Coach, a fantasy football lineup advisor. It's Week 5 of the 2026 NFL season. Be direct, opinionated, concise. Give the answer first, then the reason.
+    const systemPrompt = `You are Depth Chart Coach — a fantasy football lineup advisor. Today's date is September 2026. The 2026 NFL season is underway.
+
+CRITICAL DATA RULES:
+- It is the 2026 NFL season. 2025 draft class = second year. 2026 draft class = rookies.
+- If unsure about anything — use web search. Do NOT guess.
+
+PERSONALITY: Direct, opinionated, concise. Answer first, reason second. Fantasy football only.
 
 LEAGUE: 12-team, Full PPR, ESPN
 
-ROSTER & MATCHUPS:
-${rosterStr}
-
-KEY DECISIONS THIS WEEK:
-${decisionsStr}
-
-CONTEXT:
-- Tuten is OUT (hamstring)
-- Burden is QUESTIONABLE (groin) — game-time decision
-- Denver DEF has a terrible matchup @ KC
-- McLaurin is in the FLEX spot currently
-- Opponent this week is projected at 118 points (close matchup)
-
-Advice style: When the matchup is close, lean ceiling over floor. When you're favored, play the floor. This week is close.
+ROSTER: ${rosterStr}
+CURRENT LINEUP: ${lineupStr}
+${analysisStr}
 
 Keep responses under 150 words. No bullet points.`;
 
@@ -210,12 +307,9 @@ Keep responses under 150 words. No bullet points.`;
 
     try {
       const response = await fetch("/api/chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    system: systemPrompt,
-    messages: apiMessages,
-        }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system: systemPrompt, messages: apiMessages }),
       });
       const data = await response.json();
       const reply = data.content?.map(b => b.text || "").join("") || "Couldn't get a response.";
@@ -224,17 +318,12 @@ Keep responses under 150 words. No bullet points.`;
       setChatMessages(prev => [...prev, { role: "assistant", text: "Connection error — try again." }]);
     }
     setChatLoading(false);
-  }, [chatMessages]);
-
-  // Compute projected total
-  const projTotal = LINEUP.starters.reduce((sum, p) => sum + p.proj, 0).toFixed(1);
-  const floorTotal = LINEUP.starters.reduce((sum, p) => sum + p.floor, 0);
-  const ceilTotal = LINEUP.starters.reduce((sum, p) => sum + p.ceil, 0);
+  }, [chatMessages, myTeam, lineup, analysis]);
 
   return (
     <div style={{
       fontFamily: "'DM Sans', 'Inter', -apple-system, sans-serif",
-      maxWidth: 520, margin: "0 auto", minHeight: "100vh",
+      maxWidth: 692, margin: "0 auto", minHeight: "100vh",
       background: "#090b10", color: "#c9d1d9",
     }}>
       {/* Header */}
@@ -245,32 +334,22 @@ Keep responses under 150 words. No bullet points.`;
               <span style={{ fontSize: 18, fontWeight: 800, color: "#e6edf3" }}>Depth Chart</span>
               <span style={{ fontSize: 11, color: "#3fb950", fontWeight: 700 }}>COACH</span>
             </div>
-            <div style={{ fontSize: 11, color: "#484f58", marginTop: 1 }}>Lineup Optimizer · Week 5</div>
+            <div style={{ fontSize: 11, color: "#484f58", marginTop: 1 }}>Lineup Optimizer · {myTeam.length} players</div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 9, color: "#484f58" }}>Projected</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#e6edf3" }}>{projTotal}</div>
-            <div style={{ fontSize: 9, color: "#484f58" }}>{floorTotal} floor · {ceilTotal} ceil</div>
-          </div>
+          <button
+            onClick={refreshAnalysis}
+            disabled={analysisLoading || myTeam.length === 0}
+            style={{
+              padding: "8px 16px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 12,
+              background: analysisLoading || myTeam.length === 0 ? "#161b22" : "#3fb950",
+              color: analysisLoading || myTeam.length === 0 ? "#484f58" : "#000",
+              cursor: analysisLoading || myTeam.length === 0 ? "default" : "pointer",
+            }}
+          >{analysisLoading ? "Analyzing..." : "⟳ Refresh Matchups"}</button>
         </div>
-
-        {/* Matchup bar */}
-        <div style={{
-          marginTop: 10, padding: "6px 10px", borderRadius: 6,
-          background: "#0d1117", border: "1px solid #161b22",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          fontSize: 11,
-        }}>
-          <div>
-            <span style={{ color: "#e6edf3", fontWeight: 700 }}>Your team</span>
-            <span style={{ color: "#3fb950", fontWeight: 700, marginLeft: 8 }}>{projTotal}</span>
-          </div>
-          <div style={{ color: "#484f58" }}>vs</div>
-          <div>
-            <span style={{ color: "#f85149", fontWeight: 700, marginRight: 8 }}>118.0</span>
-            <span style={{ color: "#7d8590", fontWeight: 600 }}>Team_McMuffin</span>
-          </div>
-        </div>
+        {lastRefreshed && (
+          <div style={{ fontSize: 10, color: "#484f58", marginTop: 4 }}>Last updated: {lastRefreshed}</div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -279,9 +358,7 @@ Keep responses under 150 words. No bullet points.`;
         background: "#0d1117", borderBottom: "1px solid #161b22",
       }}>
         {[
-          { key: "decisions", label: "This Week" },
-          { key: "starters", label: "Starters" },
-          { key: "bench", label: "Bench" },
+          { key: "lineup", label: "My Lineup" },
           { key: "chat", label: "Ask Coach" },
         ].map(tab => (
           <button key={tab.key} onClick={() => setActiveView(tab.key)} style={{
@@ -293,86 +370,140 @@ Keep responses under 150 words. No bullet points.`;
         ))}
       </div>
 
-      {/* ── This Week Decisions ── */}
-      {activeView === "decisions" && (
+      {/* ── My Lineup ── */}
+      {activeView === "lineup" && (
         <div style={{ padding: 14 }}>
-          {DECISIONS.map((d, i) => {
-            const uc = URGENCY_COLORS[d.urgency];
-            return (
-              <div key={i} style={{
-                background: "#0d1117", borderRadius: 10,
-                border: `1px solid ${uc.border}`, marginBottom: 12, overflow: "hidden",
-              }}>
+          {myTeam.length === 0 ? (
+            <div style={{ fontSize: 13, color: "#484f58", textAlign: "center", padding: 32 }}>
+              No roster found. Draft players on the Draft Board or add them on the GM page.
+            </div>
+          ) : (
+            <>
+              {/* Update Lineup button when recommendation exists */}
+              {hasRecommendation && analysis?.starters && (
                 <div style={{
-                  padding: "6px 12px", background: uc.bg,
-                  fontSize: 10, fontWeight: 800, color: uc.text, letterSpacing: 0.5,
+                  padding: "10px 12px", borderRadius: 8, marginBottom: 12,
+                  background: "#3fb95015", border: "1px solid #3fb95040",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
                 }}>
-                  {d.urgency.toUpperCase()} · {d.type.replace("-", " ").toUpperCase()}
+                  <span style={{ fontSize: 12, color: "#3fb950", fontWeight: 600 }}>New lineup recommendation available</span>
+                  <button onClick={applyRecommendation} style={{
+                    padding: "6px 14px", borderRadius: 6, border: "none", fontWeight: 700, fontSize: 11,
+                    background: "#3fb950", color: "#000", cursor: "pointer",
+                  }}>Update Lineup</button>
                 </div>
-                <div style={{ padding: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#e6edf3", marginBottom: 6 }}>
-                    {d.title}
+              )}
+
+              {/* Key Decisions from analysis */}
+              {analysis?.keyDecisions && analysis.keyDecisions.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  {analysis.keyDecisions.map((d, i) => {
+                    const uc = URGENCY_COLORS[d.urgency] || URGENCY_COLORS.medium;
+                    return (
+                      <div key={i} style={{
+                        background: "#0d1117", borderRadius: 8,
+                        border: `1px solid ${uc.border}`, marginBottom: 6, overflow: "hidden",
+                      }}>
+                        <div style={{ padding: "3px 10px", background: uc.bg, fontSize: 9, fontWeight: 800, color: uc.text, letterSpacing: 0.5 }}>
+                          {(d.urgency || "").toUpperCase()}
+                        </div>
+                        <div style={{ padding: "8px 10px" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", marginBottom: 2 }}>{d.title}</div>
+                          <div style={{ fontSize: 11, color: "#7d8590", lineHeight: 1.4 }}>{d.detail}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Starters */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#3fb950", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Starting Lineup</div>
+              {STARTER_SLOTS.map(slot => {
+                const player = lineup[slot.key];
+                // Find analysis data for this player
+                const analysisData = analysis?.starters?.find(s => s.name === player?.name);
+                const matchupColor = analysisData?.oppRank >= 20 ? "#3fb950" : analysisData?.oppRank >= 13 ? "#d29922" : analysisData?.oppRank <= 12 ? "#f85149" : "#484f58";
+                const vs = analysisData ? (VERDICT_STYLE[analysisData.verdict] || { color: "#7d8590" }) : null;
+
+                return (
+                  <div key={slot.key} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                    background: "#0d1117", borderRadius: 6, marginBottom: 3,
+                    borderLeft: `3px solid ${vs?.color || "#21262d"}`,
+                  }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#484f58", width: 32, flexShrink: 0 }}>{slot.label}</span>
+                    {player ? (
+                      <>
+                        <PosBadge pos={player.pos} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>{player.name}</div>
+                          {analysisData?.note && <div style={{ fontSize: 10, color: "#484f58", marginTop: 1 }}>{analysisData.note}</div>}
+                        </div>
+                        <span style={{ fontSize: 10, color: "#484f58" }}>{player.team}</span>
+                        {analysisData && (
+                          <div style={{ textAlign: "right", minWidth: 55 }}>
+                            <div style={{ fontSize: 10, color: "#484f58" }}>{analysisData.opp}</div>
+                            {analysisData.oppRank > 0 && <div style={{ fontSize: 9, color: matchupColor, fontWeight: 700 }}>vs #{analysisData.oppRank}</div>}
+                          </div>
+                        )}
+                        {vs && (
+                          <div style={{ minWidth: 45, textAlign: "right" }}>
+                            <div style={{ fontSize: 9, fontWeight: 800, color: vs.color }}>{analysisData.verdict}</div>
+                            {analysisData.confidence > 0 && (
+                              <div style={{ width: 35, height: 3, borderRadius: 2, background: "#21262d", marginTop: 2 }}>
+                                <div style={{ width: `${analysisData.confidence}%`, height: "100%", borderRadius: 2, background: vs.color }} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#484f58", fontStyle: "italic" }}>Empty</span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 12, color: "#7d8590", lineHeight: 1.5 }}>
-                    {d.detail}
-                  </div>
+                );
+              })}
+
+              {/* Bench */}
+              {bench.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#f85149", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Bench</div>
+                  {bench.map(p => {
+                    const analysisData = analysis?.bench?.find(b => b.name === p.name);
+                    return (
+                      <div key={p.id} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                        background: "#0d1117", borderRadius: 6, marginBottom: 3, opacity: 0.6,
+                        borderLeft: "3px solid #21262d",
+                      }}>
+                        <PosBadge pos={p.pos} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>{p.name}</div>
+                          {analysisData?.note && <div style={{ fontSize: 10, color: "#484f58", marginTop: 1 }}>{analysisData.note}</div>}
+                        </div>
+                        <span style={{ fontSize: 10, color: "#484f58" }}>{p.team}</span>
+                        {analysisData && (
+                          <div style={{ textAlign: "right", minWidth: 55 }}>
+                            <div style={{ fontSize: 10, color: "#484f58" }}>{analysisData.opp}</div>
+                          </div>
+                        )}
+                        {analysisData && (
+                          <div style={{ fontSize: 9, fontWeight: 800, color: "#f85149", minWidth: 45, textAlign: "right" }}>{analysisData.verdict}</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            );
-          })}
-
-          {/* Quick matchup ratings */}
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#484f58", marginBottom: 8 }}>Starter matchup ratings</div>
-            {LINEUP.starters.filter(p => p.pos !== "K" && p.pos !== "DEF" && p.proj > 0).map(p => {
-              const quality = p.oppRk >= 20 ? "smash" : p.oppRk >= 13 ? "neutral" : "tough";
-              const qColor = quality === "smash" ? "#3fb950" : quality === "neutral" ? "#d29922" : "#f85149";
-              return (
-                <div key={p.id} style={{
-                  display: "flex", alignItems: "center", gap: 8, padding: "5px 10px",
-                  background: "#0d1117", borderRadius: 6, marginBottom: 3,
-                  borderLeft: `3px solid ${qColor}`,
-                }}>
-                  <PosBadge pos={p.pos} />
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#c9d1d9" }}>{p.name}</span>
-                  <span style={{ fontSize: 10, color: "#484f58" }}>{p.opp}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: qColor }}>
-                    {quality === "smash" ? "☀ Smash" : quality === "neutral" ? "→ Neutral" : "☁ Tough"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Starters ── */}
-      {activeView === "starters" && (
-        <div style={{ padding: 14 }}>
-          <div style={{ fontSize: 11, color: "#484f58", marginBottom: 10 }}>
-            Projection ranges show floor (left) to ceiling (right). Blue dot is projected score.
-          </div>
-          {LINEUP.starters.map(p => (
-            <PlayerCard key={p.id} player={p} isStarter={true} />
-          ))}
-        </div>
-      )}
-
-      {/* ── Bench ── */}
-      {activeView === "bench" && (
-        <div style={{ padding: 14 }}>
-          <div style={{ fontSize: 11, color: "#484f58", marginBottom: 10 }}>
-            Players on your bench with their start/sit verdict if swapped in.
-          </div>
-          {LINEUP.bench.map(p => (
-            <PlayerCard key={p.id} player={p} isStarter={false} />
-          ))}
+              )}
+            </>
+          )}
         </div>
       )}
 
       {/* ── Ask Coach Chat ── */}
       {activeView === "chat" && (
-        <div style={{ padding: 14, display: "flex", flexDirection: "column", height: "calc(100vh - 180px)" }}>
+        <div style={{ padding: 14, display: "flex", flexDirection: "column", height: "calc(100vh - 140px)" }}>
           <div style={{ flex: 1, overflowY: "auto", marginBottom: 10 }}>
             {chatMessages.length === 0 && (
               <div style={{ padding: "20px 0" }}>
@@ -380,11 +511,11 @@ Keep responses under 150 words. No bullet points.`;
                   Ask me about your lineup, matchups, or start/sit decisions.
                 </div>
                 {[
-                  "McLaurin or Burden in the flex?",
-                  "Should I sit Denver DEF and stream?",
+                  "Who should I start at flex this week?",
+                  "Any injury concerns I should know about?",
                   "Is this a ceiling week or a floor week?",
-                  "Any sneaky bench plays I'm missing?",
-                  "Would you start Dowdle over McLaurin?",
+                  "Who's the weakest starter in my lineup?",
+                  "Should I stream a defense this week?",
                 ].map((q, i) => (
                   <button key={i} onClick={() => sendChat(q)} style={{
                     display: "block", width: "100%", textAlign: "left",
