@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { SignInButton, Show, UserButton } from "@clerk/nextjs";
 
 const SECTION_MAX = 680;
 
@@ -25,9 +26,17 @@ export default function WarRoomLanding() {
           <span style={{ fontSize: 22, fontWeight: 800, color: "#e6edf3", letterSpacing: -0.5 }}>Depth Chart</span>
           <span style={{ fontSize: 11, color: "#58a6ff", fontWeight: 600 }}>2026</span>
         </div>
-        <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#7d8590" }}>
+        <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#7d8590", alignItems: "center" }}>
           <a href="#how" style={{ color: "inherit", textDecoration: "none" }}>How it works</a>
           <a href="#pricing" style={{ color: "inherit", textDecoration: "none" }}>Pricing</a>
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #30363d", background: "transparent", color: "#c9d1d9", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign in</button>
+            </SignInButton>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
         </div>
       </nav>
 
