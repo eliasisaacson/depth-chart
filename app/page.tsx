@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const SECTION_MAX = 680;
 
 export default function WarRoomLanding() {
+  const router = useRouter();
   const [plan, setPlan] = useState(null);
   const [email, setEmail] = useState("");
 
@@ -60,7 +62,7 @@ export default function WarRoomLanding() {
 
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <button
-            onClick={() => setPlan("free")}
+            onClick={() => router.push("/draft")}
             style={{
               padding: "12px 28px", borderRadius: 8, border: "none",
               background: "#3fb950", color: "#000", fontSize: 15, fontWeight: 700,
@@ -275,7 +277,9 @@ export default function WarRoomLanding() {
               Rule-based pick advisor<br />
               Bye-week stacking warnings
             </div>
-            <button style={{
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push("/draft"); }}
+              style={{
               marginTop: 16, width: "100%", padding: "10px 0", borderRadius: 6,
               background: "transparent", border: "1px solid #30363d",
               color: "#c9d1d9", fontSize: 13, fontWeight: 600, cursor: "pointer",
@@ -284,7 +288,7 @@ export default function WarRoomLanding() {
 
           {/* Pro */}
           <div
-            onClick={() => { alert("clicked!"); window.location.href = "https://buy.stripe.com/test_8x228s7Hg18H5xN8hcgrS00"; }}
+            onClick={() => router.push("/draft")}
             style={{
               background: "#0d1117", borderRadius: 12,
               border: plan === "pro" ? "2px solid #58a6ff" : "1px solid #58a6ff40",
@@ -310,7 +314,9 @@ export default function WarRoomLanding() {
               <span style={{ color: "#58a6ff", fontWeight: 600 }}>Handcuff intelligence</span><br />
               <span style={{ color: "#58a6ff", fontWeight: 600 }}>Custom league settings</span>
             </div>
-            <button style={{
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push("/draft"); }}
+              style={{
               marginTop: 16, width: "100%", padding: "10px 0", borderRadius: 6,
               background: "#58a6ff", border: "none",
               color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer",
@@ -345,7 +351,9 @@ export default function WarRoomLanding() {
                 color: "#e6edf3", fontSize: 13, outline: "none",
               }}
             />
-            <button style={{
+            <button
+              onClick={() => router.push("/draft")}
+              style={{
               padding: "10px 20px", borderRadius: 6, border: "none",
               background: "#3fb950", color: "#000", fontSize: 13,
               fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",

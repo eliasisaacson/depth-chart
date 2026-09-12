@@ -457,14 +457,18 @@ export default function DraftBoard() {
   }, [struckIds]);
 
   const snakePick = useMemo(() => {
-    const slot = 3;
+    const slot = draftPos;
     const picks = [];
     for (let r = 1; r <= 18; r++) {
       const isOdd = r % 2 === 1;
-      picks.push({ round: r, pick: isOdd ? (r - 1) * 12 + slot : r * 12 - slot + 1 });
+      if (draftType === "Linear") {
+        picks.push({ round: r, pick: (r - 1) * numTeams + slot });
+      } else {
+        picks.push({ round: r, pick: isOdd ? (r - 1) * numTeams + slot : r * numTeams - slot + 1 });
+      }
     }
     return picks;
-  }, []);
+  }, [draftPos, numTeams, draftType]);
 
   const sorted = useMemo(() => {
     if (customRankings && customRankings.length > 0) {
@@ -598,7 +602,7 @@ Keep responses under 150 words. No bullet points.`;
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--accent)" }}>Draft Board 2026</h1>
-            <div style={{ fontSize: 11, color: "var(--dim)", marginTop: 2 }}>12-Team Snake · Pick 3 · Full PPR</div>
+            <div style={{ fontSize: 11, color: "var(--dim)", marginTop: 2 }}>{numTeams}-Team {draftType} · Pick {draftPos} · {scoringRules || "Full PPR"}</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "var(--dim)" }}>Round</div>
