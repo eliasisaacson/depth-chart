@@ -479,8 +479,7 @@ Keep responses under 150 words. No bullet points.`;
 
             <p style={{ fontSize: 11, color: "#484f58", marginBottom: 16 }}>AI opponents will draft between your turns. Each pick has a 90-second clock.</p>
 
-            <button onClick={() => { setStruckIds(new Set()); setMyTeam([]); setAiTeamRosters({}); setDraftLog([]); setCurrentOverallPick(1); setDraftTimer(90); setDraftComplete(false); setChatMessages([]); localStorage.removeItem("depthchart-nba-myteam"); localStorage.removeItem("depthchart-nba-struck"); setDraftStarted(true); }} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>Start mock draft</button>
-            <button onClick={() => { setStruckIds(new Set()); setMyTeam([]); setDraftLog([]); setCurrentOverallPick(1); setChatMessages([]); localStorage.removeItem("depthchart-nba-myteam"); localStorage.removeItem("depthchart-nba-struck"); setDraftStarted(true); setDraftTimer(999999); }} style={{ width: "100%", padding: "10px 0", borderRadius: 8, border: "1px solid #30363d", background: "transparent", color: "#c9d1d9", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Manual mode (no timer, no AI)</button>
+            <button onClick={() => { setStruckIds(new Set()); setMyTeam([]); setAiTeamRosters({}); setDraftLog([]); setCurrentOverallPick(1); setDraftTimer(90); setDraftComplete(false); setChatMessages([]); localStorage.removeItem("depthchart-nba-myteam"); localStorage.removeItem("depthchart-nba-struck"); setDraftStarted(true); }} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Start mock draft</button>
           </div>
         </div>
       )}
@@ -712,4 +711,3 @@ Keep responses under 150 words. No bullet points.`;
     </div>
   );
 }
-
