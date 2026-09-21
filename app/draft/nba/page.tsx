@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useUser } from "@clerk/nextjs";
 import { NBA_PLAYERS } from "../../players-nba";
 
 // Position colors — basketball
@@ -126,6 +127,9 @@ function PlayerRow({ player, rank, struck, onToggle, compact, stealLevel, onDraf
 
 // ── Main App ─────────────────────────────────────────────────────────────
 export default function NBADraftBoard() {
+  const { user } = useUser();
+  const hasPaid = ((user?.publicMetadata || {}) as any)?.sports?.includes("nba") || false;
+  const [draftMode, setDraftMode] = useState(null); // null = choosing, "mock" or "live"
   const [struckIds, setStruckIds] = useState(new Set());
   const [myTeam, setMyTeam] = useState([]);
   const [activeTab, setActiveTab] = useState("Overall");
@@ -252,9 +256,9 @@ export default function NBADraftBoard() {
     return () => clearInterval(interval);
   }, [draftStarted, draftComplete]);
 
-  // AI pick trigger — fires when it's not the user's turn
+  // AI pick trigger — fires when it's not the user's turn (mock mode only)
   useEffect(() => {
-    if (!draftStarted || draftComplete || aiPicking) return;
+    if (!draftStarted || draftComplete || aiPicking || draftMode !== "mock") return;
     const teamNum = getTeamForPick(pickRef.current);
     if (teamNum === draftPos) return; // user's turn, don't auto-pick
 
@@ -433,53 +437,94 @@ Keep responses under 150 words. No bullet points.`;
         </div>
       )}
 
-      {/* ── Start Draft Overlay (with settings) ── */}
-      {!draftStarted && !showTutorial && (
+      {/* ── Draft Mode Selection (paid users) ── */}
+      {!draftStarted && !showTutorial && draftMode === null && hasPaid && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "#161b22", borderRadius: 16, border: "1px solid #f9731640", maxWidth: 440, width: "100%", padding: "32px 28px", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🏀</div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, color: "#e6edf3", margin: "0 0 6px" }}>Set up your draft</h2>
-            <p style={{ fontSize: 13, color: "#7d8590", marginBottom: 20 }}>Configure your league settings, then start drafting.</p>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: "#e6edf3", margin: "0 0 6px" }}>What are we doing?</h2>
+            <p style={{ fontSize: 13, color: "#7d8590", marginBottom: 24 }}>Choose your mode.</p>
+
+            <button onClick={() => setDraftMode("live")} style={{ width: "100%", padding: "14px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>🔴 Live Draft</button>
+            <p style={{ fontSize: 11, color: "#484f58", marginBottom: 16 }}>Use during your real league draft. Full AI chat, manual pick tracking.</p>
+
+            <button onClick={() => setDraftMode("mock")} style={{ width: "100%", padding: "14px 0", borderRadius: 8, border: "1px solid #30363d", background: "transparent", color: "#c9d1d9", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>🏀 Mock Draft</button>
+            <p style={{ fontSize: 11, color: "#484f58", marginTop: 8 }}>Practice against AI opponents. Full 13-round simulation.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Draft Mode Selection (free users — mock only) ── */}
+      {!draftStarted && !showTutorial && draftMode === null && !hasPaid && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#161b22", borderRadius: 16, border: "1px solid #f9731640", maxWidth: 440, width: "100%", padding: "32px 28px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🏀</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: "#e6edf3", margin: "0 0 6px" }}>Try a mock draft</h2>
+            <p style={{ fontSize: 13, color: "#7d8590", marginBottom: 24 }}>Practice against AI opponents. Full 13-round simulation — free.</p>
+
+            <button onClick={() => setDraftMode("mock")} style={{ width: "100%", padding: "14px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>Start mock draft</button>
+
+            <div style={{ padding: "12px 16px", borderRadius: 8, background: "#f9731610", border: "1px solid #f9731630" }}>
+              <p style={{ fontSize: 12, color: "#f97316", fontWeight: 600, margin: "0 0 4px" }}>Want the full experience?</p>
+              <p style={{ fontSize: 11, color: "#7d8590", margin: "0 0 8px" }}>Unlock live draft mode with unlimited AI chat — $9.99</p>
+              <button onClick={async () => {
+                try {
+                  const res = await fetch("/api/stripe/checkout", { method: "POST" });
+                  const data = await res.json();
+                  if (data.url) { window.location.href = data.url; }
+                  else if (res.status === 401) { alert("Sign in first to purchase."); }
+                  else { alert(data.error || "Something went wrong."); }
+                } catch { alert("Connection error. Try again."); }
+              }} style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#f97316", color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Unlock — $9.99</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Draft Settings (after choosing mode) ── */}
+      {!draftStarted && !showTutorial && draftMode !== null && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#161b22", borderRadius: 16, border: "1px solid #f9731640", maxWidth: 440, width: "100%", padding: "32px 28px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>{draftMode === "live" ? "🔴" : "🏀"}</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: "#e6edf3", margin: "0 0 6px" }}>{draftMode === "live" ? "Live Draft Settings" : "Mock Draft Settings"}</h2>
+            <p style={{ fontSize: 13, color: "#7d8590", marginBottom: 20 }}>Configure your league settings.</p>
 
             <div style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
-              {/* Teams */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>Number of teams</label>
                 <select value={numTeams} onChange={e => setNumTeams(Number(e.target.value))} style={{ padding: "6px 12px", background: "#0d1117", color: "#e6edf3", border: "1px solid #30363d", borderRadius: 6, fontSize: 13, width: 80 }}>
                   {[8,10,12,14,16].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              {/* Draft position */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>Your draft position</label>
                 <select value={draftPos} onChange={e => setDraftPos(Number(e.target.value))} style={{ padding: "6px 12px", background: "#0d1117", color: "#e6edf3", border: "1px solid #30363d", borderRadius: 6, fontSize: 13, width: 80 }}>
                   {Array.from({length: numTeams}, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              {/* Draft type */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>Draft type</label>
                 <select value={draftType} onChange={e => setDraftType(e.target.value)} style={{ padding: "6px 12px", background: "#0d1117", color: "#e6edf3", border: "1px solid #30363d", borderRadius: 6, fontSize: 13, width: 120 }}>
                   {["Snake","Linear","Auction"].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-              {/* League format */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>League format</label>
                 <select value={leagueFormat} onChange={e => setLeagueFormat(e.target.value)} style={{ padding: "6px 12px", background: "#0d1117", color: "#e6edf3", border: "1px solid #30363d", borderRadius: 6, fontSize: 13, width: 120 }}>
                   {["Points","9-Cat","8-Cat"].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-              {/* Scoring rules */}
               <div>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", display: "block", marginBottom: 4 }}>Custom scoring rules <span style={{ fontWeight: 400, color: "#484f58" }}>(optional)</span></label>
                 <textarea value={scoringRules} onChange={e => setScoringRules(e.target.value)} placeholder="e.g. double-doubles +5, triple-doubles +10..." rows={2} style={{ width: "100%", background: "#0d1117", color: "#e6edf3", border: "1px solid #30363d", borderRadius: 6, padding: "6px 10px", fontSize: 12, resize: "vertical", boxSizing: "border-box" }} />
               </div>
             </div>
 
-            <p style={{ fontSize: 11, color: "#484f58", marginBottom: 16 }}>AI opponents will draft between your turns. Each pick has a 90-second clock.</p>
+            {draftMode === "mock" && <p style={{ fontSize: 11, color: "#484f58", marginBottom: 16 }}>AI opponents will draft between your turns. Each pick has a 90-second clock.</p>}
+            {draftMode === "live" && <p style={{ fontSize: 11, color: "#484f58", marginBottom: 16 }}>Cross off picks as your league drafts. The AI advisor updates every pick.</p>}
 
-            <button onClick={() => { setStruckIds(new Set()); setMyTeam([]); setAiTeamRosters({}); setDraftLog([]); setCurrentOverallPick(1); setDraftTimer(90); setDraftComplete(false); setChatMessages([]); localStorage.removeItem("depthchart-nba-myteam"); localStorage.removeItem("depthchart-nba-struck"); setDraftStarted(true); }} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Start mock draft</button>
+            <button onClick={() => { setStruckIds(new Set()); setMyTeam([]); setAiTeamRosters({}); setDraftLog([]); setCurrentOverallPick(1); setDraftTimer(90); setDraftComplete(false); setChatMessages([]); localStorage.removeItem("depthchart-nba-myteam"); localStorage.removeItem("depthchart-nba-struck"); setDraftStarted(true); }} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{draftMode === "live" ? "Start live draft" : "Start mock draft"}</button>
+            <button onClick={() => setDraftMode(null)} style={{ width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: "transparent", color: "#484f58", fontSize: 12, cursor: "pointer" }}>← Back</button>
           </div>
         </div>
       )}
@@ -701,19 +746,79 @@ Keep responses under 150 words. No bullet points.`;
           <div style={{ flex: 1, display: "flex", flexDirection: "column", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>Talk it out</div>
-              <div style={{ fontSize: 9, fontWeight: 600, color: userMsgCount >= MESSAGE_CAP ? "var(--red)" : "var(--dim)" }}>{userMsgCount}/{MESSAGE_CAP}</div>
+              {hasPaid && <div style={{ fontSize: 9, fontWeight: 600, color: userMsgCount >= MESSAGE_CAP ? "var(--red)" : "var(--dim)" }}>{userMsgCount}/{MESSAGE_CAP}</div>}
             </div>
             <div style={{ flex: 1, maxHeight: 260, overflowY: "auto", marginBottom: 6 }}>
-              {chatMessages.length === 0 && (<div style={{ fontSize: 11, color: "var(--dim)", padding: "4px 0", lineHeight: 1.4 }}>Ask me anything — "Should I punt assists?", "Is Wemby worth #2?", "Best C available?"</div>)}
+              {chatMessages.length === 0 && hasPaid && (<div style={{ fontSize: 11, color: "var(--dim)", padding: "4px 0", lineHeight: 1.4 }}>Ask me anything — "Should I punt assists?", "Is Wemby worth #2?", "Best C available?"</div>)}
+              {chatMessages.length === 0 && !hasPaid && (<div style={{ fontSize: 11, color: "var(--dim)", padding: "4px 0", lineHeight: 1.4 }}>Tap a question below to ask the advisor.</div>)}
               {chatMessages.map((m, i) => (<div key={i} style={{ marginBottom: 6, display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}><div style={{ padding: "6px 10px", borderRadius: 8, maxWidth: "90%", fontSize: 12, lineHeight: 1.4, background: m.role === "user" ? "var(--accent)" : "var(--card)", color: m.role === "user" ? "#000" : "var(--fg)", border: m.role === "user" ? "none" : "1px solid var(--border)" }}>{m.text}</div></div>))}
               {chatLoading && (<div style={{ padding: "6px 10px", fontSize: 11, color: "var(--dim)", fontStyle: "italic" }}>Thinking...</div>)}
               <div ref={el => { chatEndRef.current = el; if (el) el.scrollIntoView({ behavior: "smooth" }); }} />
             </div>
-            {isAtCap && (<div style={{ padding: "6px 8px", borderRadius: 6, marginBottom: 6, fontSize: 11, background: "#f8514915", border: "1px solid #f8514940", color: "#f85149", textAlign: "center" }}>Message limit reached.</div>)}
-            <div style={{ display: "flex", gap: 4 }}>
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !chatLoading && !isAtCap) sendChat(chatInput); }} placeholder={isAtCap ? "Limit reached" : "Debate a pick..."} disabled={chatLoading || isAtCap} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--card)", color: "var(--fg)", fontSize: 12, outline: "none", opacity: isAtCap ? 0.5 : 1 }} />
-              <button onClick={() => sendChat(chatInput)} disabled={chatLoading || !chatInput.trim() || isAtCap} style={{ padding: "6px 12px", borderRadius: 6, border: "none", fontWeight: 700, fontSize: 12, background: chatLoading || !chatInput.trim() || isAtCap ? "var(--tab-bg)" : "var(--accent)", color: chatLoading || !chatInput.trim() || isAtCap ? "var(--dim)" : "#000", cursor: chatLoading || !chatInput.trim() || isAtCap ? "default" : "pointer" }}>Send</button>
-            </div>
+
+            {/* Free users: stock question buttons + 1 custom */}
+            {!hasPaid && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
+                {[
+                  "Who should I pick next?",
+                  "Where's the value falling?",
+                  "What position should I target?",
+                ].map((q, i) => {
+                  const alreadyAsked = chatMessages.some(m => m.role === "user" && m.text === q);
+                  return (
+                    <button key={i} onClick={() => { if (!alreadyAsked && !chatLoading) sendChat(q); }} disabled={alreadyAsked || chatLoading}
+                      style={{
+                        padding: "8px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, textAlign: "left", cursor: alreadyAsked || chatLoading ? "default" : "pointer",
+                        background: alreadyAsked ? "var(--tab-bg)" : "var(--card)",
+                        color: alreadyAsked ? "var(--dim)" : "var(--fg)",
+                        border: alreadyAsked ? "1px solid var(--border)" : "1px solid var(--accent)40",
+                        opacity: alreadyAsked ? 0.5 : 1,
+                      }}>
+                      {alreadyAsked ? `✓ ${q}` : q}
+                    </button>
+                  );
+                })}
+                {/* One free custom question */}
+                {(() => {
+                  const stockQs = ["Who should I pick next?", "Where's the value falling?", "What position should I target?"];
+                  const customUsed = chatMessages.some(m => m.role === "user" && !stockQs.includes(m.text));
+                  return customUsed ? (
+                    <div style={{ padding: "8px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "var(--tab-bg)", color: "var(--dim)", border: "1px solid var(--border)", opacity: 0.5 }}>✓ Custom question used</div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !chatLoading && chatInput.trim()) sendChat(chatInput); }} placeholder="Ask one custom question..." disabled={chatLoading} style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--accent)40", background: "var(--card)", color: "var(--fg)", fontSize: 11, outline: "none" }} />
+                      <button onClick={() => { if (chatInput.trim() && !chatLoading) sendChat(chatInput); }} disabled={chatLoading || !chatInput.trim()} style={{ padding: "8px 12px", borderRadius: 6, border: "none", fontWeight: 700, fontSize: 11, background: chatLoading || !chatInput.trim() ? "var(--tab-bg)" : "var(--accent)", color: chatLoading || !chatInput.trim() ? "var(--dim)" : "#000", cursor: chatLoading || !chatInput.trim() ? "default" : "pointer" }}>Ask</button>
+                    </div>
+                  );
+                })()}
+                {chatMessages.filter(m => m.role === "user").length >= 4 && (
+                  <div style={{ padding: "8px 10px", borderRadius: 6, fontSize: 11, background: "#f9731610", border: "1px solid #f9731630", textAlign: "center", marginTop: 4 }}>
+                    <span style={{ color: "#f97316", fontWeight: 600 }}>Want unlimited custom questions?</span>
+                    <br />
+                    <button onClick={async () => {
+                      try {
+                        const res = await fetch("/api/stripe/checkout", { method: "POST" });
+                        const data = await res.json();
+                        if (data.url) { window.location.href = data.url; }
+                        else if (res.status === 401) { alert("Sign in first to purchase."); }
+                        else { alert(data.error || "Something went wrong."); }
+                      } catch { alert("Connection error."); }
+                    }} style={{ marginTop: 6, padding: "6px 16px", borderRadius: 4, border: "none", background: "#f97316", color: "#000", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Unlock — $9.99</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Paid users: full chat input */}
+            {hasPaid && (
+              <>
+                {isAtCap && (<div style={{ padding: "6px 8px", borderRadius: 6, marginBottom: 6, fontSize: 11, background: "#f8514915", border: "1px solid #f8514940", color: "#f85149", textAlign: "center" }}>Message limit reached.</div>)}
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !chatLoading && !isAtCap) sendChat(chatInput); }} placeholder={isAtCap ? "Limit reached" : "Debate a pick..."} disabled={chatLoading || isAtCap} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--card)", color: "var(--fg)", fontSize: 12, outline: "none", opacity: isAtCap ? 0.5 : 1 }} />
+                  <button onClick={() => sendChat(chatInput)} disabled={chatLoading || !chatInput.trim() || isAtCap} style={{ padding: "6px 12px", borderRadius: 6, border: "none", fontWeight: 700, fontSize: 12, background: chatLoading || !chatInput.trim() || isAtCap ? "var(--tab-bg)" : "var(--accent)", color: chatLoading || !chatInput.trim() || isAtCap ? "var(--dim)" : "#000", cursor: chatLoading || !chatInput.trim() || isAtCap ? "default" : "pointer" }}>Send</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
