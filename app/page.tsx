@@ -334,7 +334,16 @@ export default function DepthChartLanding() {
               <span style={{ color: "#f97316", fontWeight: 600 }}>CSV import your own rankings</span>
             </div>
             <button
-              onClick={() => router.push("/draft/nba")}
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/stripe/checkout", { method: "POST" });
+                  const data = await res.json();
+                  if (data.url) { window.location.href = data.url; }
+                  else if (res.status === 401) { alert("Sign in first to purchase the NBA Draft Advisor."); }
+                  else if (data.error === "Already purchased") { router.push("/draft/nba"); }
+                  else { alert(data.error || "Something went wrong. Try again."); }
+                } catch { alert("Connection error. Try again."); }
+              }}
               style={{
               marginTop: 16, width: "100%", padding: "10px 0", borderRadius: 6,
               background: "#f97316", border: "none",

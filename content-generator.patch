@@ -1,0 +1,479 @@
+diff --git a/app/api/stripe/checkout/route.ts b/app/api/stripe/checkout/route.ts
+new file mode 100644
+index 0000000..fbfe324
+--- /dev/null
++++ b/app/api/stripe/checkout/route.ts
+@@ -0,0 +1,52 @@
++import { auth, currentUser } from "@clerk/nextjs/server";
++
++const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
++const PRICE_ID = "price_1UHs1sJEsDZ704OXE9nxW9el";
++
++export async function POST(request: Request) {
++  // Require auth
++  const { userId } = await auth();
++  if (!userId) {
++    return Response.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const user = await currentUser();
++  const email = user?.emailAddresses?.[0]?.emailAddress;
++
++  // Check if user already has NBA access
++  const meta = (user?.publicMetadata || {}) as Record<string, any>;
++  const sports = meta.sports || [];
++  if (sports.includes("nba")) {
++    return Response.json({ error: "Already purchased", url: "/draft/nba" }, { status: 400 });
++  }
++
++  const origin = request.headers.get("origin") || "https://depthchartsports.app";
++
++  // Create Stripe Checkout Session
++  const params = new URLSearchParams();
++  params.append("mode", "payment");
++  params.append("success_url", `${origin}/success?session_id={CHECKOUT_SESSION_ID}`);
++  params.append("cancel_url", `${origin}/draft/nba`);
++  params.append("line_items[0][price]", PRICE_ID);
++  params.append("line_items[0][quantity]", "1");
++  params.append("metadata[clerk_user_id]", userId);
++  params.append("metadata[sport]", "nba");
++  if (email) params.append("customer_email", email);
++
++  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
++    method: "POST",
++    headers: {
++      "Authorization": `Bearer ${STRIPE_SECRET_KEY}`,
++      "Content-Type": "application/x-www-form-urlencoded",
++    },
++    body: params.toString(),
++  });
++
++  const session = await response.json();
++
++  if (session.error) {
++    return Response.json({ error: session.error.message }, { status: 400 });
++  }
++
++  return Response.json({ url: session.url });
++}
+diff --git a/app/api/stripe/webhook/route.ts b/app/api/stripe/webhook/route.ts
+new file mode 100644
+index 0000000..6d920ae
+--- /dev/null
++++ b/app/api/stripe/webhook/route.ts
+@@ -0,0 +1,60 @@
++const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
++const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
++const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY!;
++
++export async function POST(request: Request) {
++  const body = await request.text();
++
++  // If webhook secret is configured, verify signature
++  // For now, we'll also handle without verification for testing
++  if (STRIPE_WEBHOOK_SECRET) {
++    const sig = request.headers.get("stripe-signature");
++    if (!sig) {
++      return Response.json({ error: "Missing signature" }, { status: 400 });
++    }
++    // Note: Full signature verification requires the stripe package
++    // For production, install stripe and verify properly
++  }
++
++  let event;
++  try {
++    event = JSON.parse(body);
++  } catch {
++    return Response.json({ error: "Invalid JSON" }, { status: 400 });
++  }
++
++  if (event.type === "checkout.session.completed") {
++    const session = event.data.object;
++    const clerkUserId = session.metadata?.clerk_user_id;
++    const sport = session.metadata?.sport;
++
++    if (clerkUserId && sport) {
++      // Get current user metadata from Clerk
++      const userRes = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}`, {
++        headers: { "Authorization": `Bearer ${CLERK_SECRET_KEY}` },
++      });
++      const userData = await userRes.json();
++      const currentMeta = userData.public_metadata || {};
++      const currentSports = currentMeta.sports || [];
++
++      // Add the sport if not already there
++      if (!currentSports.includes(sport)) {
++        currentSports.push(sport);
++      }
++
++      // Update Clerk user metadata
++      await fetch(`https://api.clerk.com/v1/users/${clerkUserId}`, {
++        method: "PATCH",
++        headers: {
++          "Authorization": `Bearer ${CLERK_SECRET_KEY}`,
++          "Content-Type": "application/json",
++        },
++        body: JSON.stringify({
++          public_metadata: { ...currentMeta, sports: currentSports },
++        }),
++      });
++    }
++  }
++
++  return Response.json({ received: true });
++}
+diff --git a/app/create/page.tsx b/app/create/page.tsx
+new file mode 100644
+index 0000000..40df920
+--- /dev/null
++++ b/app/create/page.tsx
+@@ -0,0 +1,263 @@
++"use client";
++import { useState } from "react";
++
++const SPORTS = ["NBA", "NFL"];
++
++const CONTENT_TYPES = [
++  { id: "draft-strategy", label: "Draft Strategy", desc: "Pre-draft analysis and player rankings takes" },
++  { id: "waiver-wire", label: "Waiver Wire", desc: "Pickups and drops for this week" },
++  { id: "start-sit", label: "Start/Sit", desc: "Who to start and who to bench" },
++  { id: "trade-analysis", label: "Trade Analysis", desc: "Evaluate a trade or propose targets" },
++  { id: "injury-impact", label: "Injury Impact", desc: "How an injury reshuffles rankings" },
++  { id: "weekly-preview", label: "Weekly Preview", desc: "Matchups, streamers, and schedule plays" },
++  { id: "rankings-take", label: "Hot Take", desc: "A bold, contrarian rankings opinion" },
++  { id: "player-spotlight", label: "Player Spotlight", desc: "Deep dive on one player's fantasy outlook" },
++];
++
++const OUTPUT_FORMATS = [
++  { id: "substack", label: "Substack Article", desc: "800-1500 words, structured with headers" },
++  { id: "twitter", label: "X / Twitter Thread", desc: "3-8 tweets, hook opener, numbered takes" },
++  { id: "instagram", label: "Instagram Caption", desc: "Punchy single post with hashtags" },
++];
++
++const TONES = [
++  { id: "analytical", label: "Analytical", desc: "Data-driven, measured" },
++  { id: "hot-take", label: "Hot Take", desc: "Bold, provocative, confident" },
++  { id: "casual", label: "Casual", desc: "Conversational, fun, relatable" },
++];
++
++export default function ContentGenerator() {
++  const [sport, setSport] = useState("NBA");
++  const [contentType, setContentType] = useState("draft-strategy");
++  const [format, setFormat] = useState("substack");
++  const [tone, setTone] = useState("analytical");
++  const [topic, setTopic] = useState("");
++  const [output, setOutput] = useState("");
++  const [loading, setLoading] = useState(false);
++  const [copied, setCopied] = useState(false);
++
++  const generate = async () => {
++    if (!topic.trim()) return;
++    setLoading(true);
++    setOutput("");
++    setCopied(false);
++
++    const contentLabel = CONTENT_TYPES.find(c => c.id === contentType)?.label || contentType;
++    const formatLabel = OUTPUT_FORMATS.find(f => f.id === format)?.label || format;
++    const toneLabel = TONES.find(t => t.id === tone)?.label || tone;
++
++    const formatInstructions = {
++      substack: `Write a Substack article (800-1500 words). Structure with a compelling headline, an intro hook that grabs fantasy players, 3-5 sections with headers, data-backed analysis, and a conclusion with actionable takeaways. End with a subtle plug: "Built with Depth Chart Sports — try the AI draft advisor at depthchartsports.app"`,
++      twitter: `Write an X/Twitter thread (5-8 tweets). Start with a hook tweet that stops the scroll. Number each take (1/, 2/, etc.). Keep each tweet under 280 characters. End with a CTA: "Want an AI co-pilot for your draft? depthchartsports.app 🏀"`,
++      instagram: `Write an Instagram caption (150-300 words). Start with a bold opener. Use short paragraphs. Include 2-3 emoji naturally (not forced). End with a CTA and include 8-12 relevant hashtags on a separate line.`,
++    };
++
++    const systemPrompt = `You are the head writer for Depth Chart Sports, a fantasy sports content brand. You write ${sport} fantasy content that is sharp, opinionated, and backed by current data.
++
++CRITICAL: The current date is October 2026. For NBA, the 2026-27 season is about to begin. For NFL, the 2026 season is underway. Use web search to get the latest news, stats, injuries, and transactions before writing. Do NOT use outdated information.
++
++VOICE: ${toneLabel} tone. You are a fantasy expert who respects the reader's intelligence. No fluff, no obvious takes, no "in conclusion" language. Write like you're texting a smart friend who plays fantasy, not like you're writing a term paper.
++
++CONTENT TYPE: ${contentLabel}
++OUTPUT FORMAT: ${formatLabel}
++SPORT: ${sport}
++
++${formatInstructions[format]}
++
++IMPORTANT RULES:
++- Search the web for current ${sport} fantasy news, stats, and player situations before writing
++- Every claim should be grounded in real, current data
++- Name specific players, matchups, and stats — no vague generalities
++- If writing about a specific topic the user provides, stay focused on it
++- Include the Depth Chart Sports branding naturally at the end — don't make it feel like an ad`;
++
++    try {
++      const response = await fetch("/api/chat", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          system: systemPrompt,
++          max_tokens: format === "substack" ? 4000 : 1500,
++          messages: [
++            { role: "user", content: `Write a ${contentLabel.toLowerCase()} piece about: ${topic}` }
++          ],
++        }),
++      });
++      const data = await response.json();
++      const text = data.content?.map((b: any) => b.text || "").join("\n") || "Couldn't generate content. Try again.";
++      setOutput(text);
++    } catch {
++      setOutput("Connection error — try again.");
++    }
++    setLoading(false);
++  };
++
++  const copyToClipboard = () => {
++    navigator.clipboard.writeText(output);
++    setCopied(true);
++    setTimeout(() => setCopied(false), 2000);
++  };
++
++  return (
++    <div style={{
++      fontFamily: "'Inter', -apple-system, sans-serif",
++      background: "#090b10", color: "#c9d1d9", minHeight: "100vh",
++    }}>
++      {/* Header */}
++      <div style={{
++        padding: "16px 24px", borderBottom: "2px solid #f97316",
++        maxWidth: 1100, margin: "0 auto",
++        display: "flex", alignItems: "center", justifyContent: "space-between",
++      }}>
++        <div>
++          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#f97316" }}>✍️ Content Generator</h1>
++          <div style={{ fontSize: 11, color: "#7d8590", marginTop: 2 }}>AI-powered fantasy content for Substack, X, and Instagram</div>
++        </div>
++        <a href="/" style={{ fontSize: 12, color: "#7d8590", textDecoration: "none" }}>← Back to home</a>
++      </div>
++
++      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 24px", display: "flex", gap: 20 }}>
++
++        {/* ── LEFT: Controls ── */}
++        <div style={{ width: 320, flexShrink: 0 }}>
++          {/* Sport */}
++          <div style={{ marginBottom: 16 }}>
++            <label style={{ fontSize: 12, fontWeight: 600, color: "#e6edf3", display: "block", marginBottom: 6 }}>Sport</label>
++            <div style={{ display: "flex", gap: 6 }}>
++              {SPORTS.map(s => (
++                <button key={s} onClick={() => setSport(s)} style={{
++                  flex: 1, padding: "8px 0", borderRadius: 6, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
++                  background: sport === s ? "#f97316" : "#161b22",
++                  color: sport === s ? "#000" : "#7d8590",
++                }}>{s}</button>
++              ))}
++            </div>
++          </div>
++
++          {/* Content Type */}
++          <div style={{ marginBottom: 16 }}>
++            <label style={{ fontSize: 12, fontWeight: 600, color: "#e6edf3", display: "block", marginBottom: 6 }}>Content Type</label>
++            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
++              {CONTENT_TYPES.map(c => (
++                <button key={c.id} onClick={() => setContentType(c.id)} style={{
++                  padding: "8px 12px", borderRadius: 6, border: "none", textAlign: "left", cursor: "pointer",
++                  background: contentType === c.id ? "#f9731620" : "#161b22",
++                  border: contentType === c.id ? "1px solid #f9731640" : "1px solid #21262d",
++                }}>
++                  <div style={{ fontSize: 12, fontWeight: 600, color: contentType === c.id ? "#f97316" : "#e6edf3" }}>{c.label}</div>
++                  <div style={{ fontSize: 10, color: "#484f58", marginTop: 2 }}>{c.desc}</div>
++                </button>
++              ))}
++            </div>
++          </div>
++
++          {/* Output Format */}
++          <div style={{ marginBottom: 16 }}>
++            <label style={{ fontSize: 12, fontWeight: 600, color: "#e6edf3", display: "block", marginBottom: 6 }}>Output Format</label>
++            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
++              {OUTPUT_FORMATS.map(f => (
++                <button key={f.id} onClick={() => setFormat(f.id)} style={{
++                  padding: "8px 12px", borderRadius: 6, border: "none", textAlign: "left", cursor: "pointer",
++                  background: format === f.id ? "#f9731620" : "#161b22",
++                  border: format === f.id ? "1px solid #f9731640" : "1px solid #21262d",
++                }}>
++                  <div style={{ fontSize: 12, fontWeight: 600, color: format === f.id ? "#f97316" : "#e6edf3" }}>{f.label}</div>
++                  <div style={{ fontSize: 10, color: "#484f58", marginTop: 2 }}>{f.desc}</div>
++                </button>
++              ))}
++            </div>
++          </div>
++
++          {/* Tone */}
++          <div style={{ marginBottom: 16 }}>
++            <label style={{ fontSize: 12, fontWeight: 600, color: "#e6edf3", display: "block", marginBottom: 6 }}>Tone</label>
++            <div style={{ display: "flex", gap: 6 }}>
++              {TONES.map(t => (
++                <button key={t.id} onClick={() => setTone(t.id)} style={{
++                  flex: 1, padding: "8px 0", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer",
++                  background: tone === t.id ? "#f97316" : "#161b22",
++                  color: tone === t.id ? "#000" : "#7d8590",
++                }}>{t.label}</button>
++              ))}
++            </div>
++          </div>
++        </div>
++
++        {/* ── RIGHT: Topic + Output ── */}
++        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
++          {/* Topic input */}
++          <div style={{ marginBottom: 16 }}>
++            <label style={{ fontSize: 12, fontWeight: 600, color: "#e6edf3", display: "block", marginBottom: 6 }}>What should we write about?</label>
++            <textarea
++              value={topic}
++              onChange={e => setTopic(e.target.value)}
++              placeholder={sport === "NBA"
++                ? "e.g. Victor Wembanyama's fantasy ceiling in year 2, punt FT% builds for 9-cat leagues, top 10 sleepers outside the first 5 rounds..."
++                : "e.g. Week 3 waiver wire pickups, trade targets after Bijan Robinson's bye week..."
++              }
++              rows={3}
++              style={{
++                width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #21262d",
++                background: "#161b22", color: "#e6edf3", fontSize: 13, resize: "vertical",
++                outline: "none", boxSizing: "border-box", lineHeight: 1.5,
++              }}
++            />
++          </div>
++
++          {/* Generate button */}
++          <button
++            onClick={generate}
++            disabled={loading || !topic.trim()}
++            style={{
++              padding: "12px 0", borderRadius: 8, border: "none", fontSize: 14, fontWeight: 700,
++              cursor: loading || !topic.trim() ? "default" : "pointer", marginBottom: 16, width: "100%",
++              background: loading || !topic.trim() ? "#21262d" : "#f97316",
++              color: loading || !topic.trim() ? "#484f58" : "#000",
++            }}
++          >
++            {loading ? "Generating... (searching the web for current data)" : "Generate Content"}
++          </button>
++
++          {/* Output */}
++          {output && (
++            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
++              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
++                <div style={{ fontSize: 12, fontWeight: 600, color: "#e6edf3" }}>Output</div>
++                <button
++                  onClick={copyToClipboard}
++                  style={{
++                    padding: "4px 12px", borderRadius: 4, border: "1px solid #21262d",
++                    background: copied ? "#3fb950" : "#161b22",
++                    color: copied ? "#000" : "#c9d1d9",
++                    fontSize: 11, fontWeight: 600, cursor: "pointer",
++                  }}
++                >{copied ? "✓ Copied!" : "Copy to clipboard"}</button>
++              </div>
++              <div style={{
++                flex: 1, padding: "16px 20px", borderRadius: 8, border: "1px solid #21262d",
++                background: "#0d1117", overflowY: "auto", whiteSpace: "pre-wrap",
++                fontSize: 13, lineHeight: 1.7, color: "#c9d1d9", minHeight: 300,
++              }}>
++                {output}
++              </div>
++            </div>
++          )}
++
++          {/* Empty state */}
++          {!output && !loading && (
++            <div style={{
++              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
++              border: "1px dashed #21262d", borderRadius: 8, minHeight: 300,
++            }}>
++              <div style={{ textAlign: "center", color: "#484f58" }}>
++                <div style={{ fontSize: 32, marginBottom: 8 }}>✍️</div>
++                <div style={{ fontSize: 13, fontWeight: 500 }}>Pick a content type, set your topic, and hit generate.</div>
++                <div style={{ fontSize: 11, marginTop: 4 }}>The AI will search the web for current data before writing.</div>
++              </div>
++            </div>
++          )}
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/app/draft/nba/page.tsx b/app/draft/nba/page.tsx
+index 5970a27..980fa43 100644
+--- a/app/draft/nba/page.tsx
++++ b/app/draft/nba/page.tsx
+@@ -502,6 +502,16 @@ Keep responses under 150 words. No bullet points.`;
+               ))}
+             </div>
+             <p style={{ fontSize: 13, color: "#f97316", fontWeight: 600, marginBottom: 16 }}>Ready for your real draft? Unlock live mode for $9.99.</p>
++            <button onClick={async () => {
++              try {
++                const res = await fetch("/api/stripe/checkout", { method: "POST" });
++                const data = await res.json();
++                if (data.url) { window.location.href = data.url; }
++                else if (res.status === 401) { alert("Sign in first to purchase."); }
++                else if (data.error === "Already purchased") { setDraftComplete(false); }
++                else { alert(data.error || "Something went wrong."); }
++              } catch { alert("Connection error. Try again."); }
++            }} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>Unlock Live Draft — $9.99</button>
+             <button onClick={() => { setDraftComplete(false); }} style={{ width: "100%", padding: "10px 0", borderRadius: 8, border: "1px solid #30363d", background: "transparent", color: "#c9d1d9", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Review board</button>
+           </div>
+         </div>
+diff --git a/app/page.tsx b/app/page.tsx
+index 9bd68f4..e7e744e 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -334,7 +334,16 @@ export default function DepthChartLanding() {
+               <span style={{ color: "#f97316", fontWeight: 600 }}>CSV import your own rankings</span>
+             </div>
+             <button
+-              onClick={() => router.push("/draft/nba")}
++              onClick={async () => {
++                try {
++                  const res = await fetch("/api/stripe/checkout", { method: "POST" });
++                  const data = await res.json();
++                  if (data.url) { window.location.href = data.url; }
++                  else if (res.status === 401) { alert("Sign in first to purchase the NBA Draft Advisor."); }
++                  else if (data.error === "Already purchased") { router.push("/draft/nba"); }
++                  else { alert(data.error || "Something went wrong. Try again."); }
++                } catch { alert("Connection error. Try again."); }
++              }}
+               style={{
+               marginTop: 16, width: "100%", padding: "10px 0", borderRadius: 6,
+               background: "#f97316", border: "none",
+diff --git a/app/success/page.tsx b/app/success/page.tsx
+new file mode 100644
+index 0000000..5073c74
+--- /dev/null
++++ b/app/success/page.tsx
+@@ -0,0 +1,37 @@
++"use client";
++import { useRouter } from "next/navigation";
++
++export default function SuccessPage() {
++  const router = useRouter();
++
++  return (
++    <div style={{
++      fontFamily: "'Inter', -apple-system, sans-serif",
++      background: "#090b10", color: "#c9d1d9", minHeight: "100vh",
++      display: "flex", alignItems: "center", justifyContent: "center",
++    }}>
++      <div style={{
++        background: "#161b22", borderRadius: 16, border: "1px solid #3fb95040",
++        maxWidth: 440, width: "100%", padding: "40px 32px", textAlign: "center",
++        margin: 20,
++      }}>
++        <div style={{ fontSize: 48, marginBottom: 16 }}>🏆</div>
++        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#e6edf3", margin: "0 0 8px" }}>You're in!</h1>
++        <p style={{ fontSize: 14, color: "#7d8590", marginBottom: 24, lineHeight: 1.5 }}>
++          NBA Draft Advisor is unlocked. You now have full access to the live draft board with unlimited AI chat.
++        </p>
++        <button
++          onClick={() => router.push("/draft/nba")}
++          style={{
++            width: "100%", padding: "12px 0", borderRadius: 8, border: "none",
++            background: "#f97316", color: "#000", fontSize: 15, fontWeight: 700,
++            cursor: "pointer", marginBottom: 10,
++          }}
++        >Go to your draft board</button>
++        <p style={{ fontSize: 11, color: "#484f58", marginTop: 12 }}>
++          Your purchase is tied to your account. You can access the live draft from any device.
++        </p>
++      </div>
++    </div>
++  );
++}

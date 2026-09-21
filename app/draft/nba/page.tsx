@@ -502,6 +502,16 @@ Keep responses under 150 words. No bullet points.`;
               ))}
             </div>
             <p style={{ fontSize: 13, color: "#f97316", fontWeight: 600, marginBottom: 16 }}>Ready for your real draft? Unlock live mode for $9.99.</p>
+            <button onClick={async () => {
+              try {
+                const res = await fetch("/api/stripe/checkout", { method: "POST" });
+                const data = await res.json();
+                if (data.url) { window.location.href = data.url; }
+                else if (res.status === 401) { alert("Sign in first to purchase."); }
+                else if (data.error === "Already purchased") { setDraftComplete(false); }
+                else { alert(data.error || "Something went wrong."); }
+              } catch { alert("Connection error. Try again."); }
+            }} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: "#f97316", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>Unlock Live Draft — $9.99</button>
             <button onClick={() => { setDraftComplete(false); }} style={{ width: "100%", padding: "10px 0", borderRadius: 8, border: "1px solid #30363d", background: "transparent", color: "#c9d1d9", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Review board</button>
           </div>
         </div>
